@@ -24,5 +24,5 @@ setuptools.setup(
         "Development Status :: 4 - Beta",
     ],
     python_requires='~=3.5',
-    install_requires=['pyserial>=3.4', 'pyserial_asyncio>=0.4'],
+    install_requires=['pyserial>=3.4', 'pyserial_asyncio>=0.4', 'aiounittest>=1.1.0'],
 )
