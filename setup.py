@@ -5,7 +5,8 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="rsp1570serial-pp81381",
-    version="0.0.4",
+    use_scm_version=True,
+    setup_requires=['setuptools_scm'],
     author="Phil Porter",
     description="Rotel RSP-1570 processor asyncio RS-232 protocol",
     long_description=long_description,
