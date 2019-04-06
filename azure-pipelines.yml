@@ -55,7 +55,7 @@ jobs:
   - script: python setup.py sdist bdist_wheel
     displayName: 'Build sdist and bdist_wheel'
 
-  - task CopyFiles@2
+  - task: CopyFiles@2
     inputs:
       sourceFolder: $(Agent.BuildDirectory)
       contents: dist/*
