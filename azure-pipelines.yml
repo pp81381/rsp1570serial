@@ -62,6 +62,7 @@ jobs:
     inputs:
       sourceFolder: $(Agent.BuildDirectory)
       contents: dist/*
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
 
   - task: PublishBuildArtifacts@1
     inputs:
