@@ -52,8 +52,8 @@ jobs:
       versionSpec: '3.5'
       architecture: 'x64'
 
-  - script: python -m pip install wheel
-    displayName: 'Install wheel'
+  - script: python -m pip install --upgrade setuptools wheel
+    displayName: 'Install wheel and ensure that setuptools is up to date'
 
   - script: python setup.py sdist bdist_wheel
     displayName: 'Build sdist and bdist_wheel'
