@@ -23,6 +23,12 @@ The RotelAmpConn object encapsulates all of the functionality of the library:
         conn.close()
 ```
 
+The serial_port parameter can be anything that can be passed to `serial.serial_for_url()`.  E.g.
+
+* `/dev/ttyUSB0` (Linux)
+* `COM3` (Windows)
+* `socket://192.168.0.100:50000` (if you are using a TCP/IP to serial  converter)
+
 Send a command (see commands.py for the full list):
 
 ```python
