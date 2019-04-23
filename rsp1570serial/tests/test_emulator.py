@@ -2,6 +2,7 @@ import asyncio
 import aiounittest
 from rsp1570serial.emulator import RotelRSP1570Emulator, CommandHandler
 import socket
+import sys
 
 async def simulate_server_activity(async_server_writer_func):
     """
@@ -13,11 +14,13 @@ async def simulate_server_activity(async_server_writer_func):
     server_writer = (await asyncio.open_connection(sock=wsock))[1]
     await async_server_writer_func(server_writer)
     server_writer.close() # So that client_reader will receive an EOF
-    await server_writer.wait_closed()
+    if sys.version_info > (3, 7):
+        await server_writer.wait_closed()
 
     data = await client_reader.read()
     client_writer.close()
-    await client_writer.wait_closed()
+    if sys.version_info > (3, 7):
+        await client_writer.wait_closed()
     wsock.close()
     return data
 
