@@ -39,9 +39,10 @@ async def heartbeat():
     except asyncio.CancelledError:
         logging.info("Heartbeat cancelled")
 
-def example_runner(build_example_tasks):
-    serial_port = get_platform_serial_port()
-        
+def example_runner(build_example_tasks, serial_port=None):
+    if serial_port is None:
+        serial_port = get_platform_serial_port()
+
     loop = asyncio.get_event_loop()
     main_task = loop.create_task(main(loop, serial_port, build_example_tasks))
     #pylint: disable=unused-variable

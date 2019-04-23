@@ -16,6 +16,8 @@ async def run_example_commands(conn):
 #        await asyncio.sleep(3)
 #        await send_command_and_log(conn, 'POWER_ON')
         await asyncio.sleep(3)
+        await send_command_and_log(conn, 'DISPLAY_REFRESH')
+        await asyncio.sleep(3)
         await send_command_and_log(conn, 'ZONE_4_12V_TRIGGER_6_TOGGLE')
         await asyncio.sleep(3)
         await send_volume_direct_command_and_log(conn, 1, 40)
@@ -46,4 +48,4 @@ def build_example_tasks(conn):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    example_runner(build_example_tasks)
+    example_runner(build_example_tasks, "socket://192.168.2.119:50000")
