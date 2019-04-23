@@ -1,4 +1,5 @@
 import logging
+from rsp1570serial.icons import flags_to_icons, icons_that_are_on
 from rsp1570serial.protocol import decode_protocol_stream, encode_payload
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,11 +27,10 @@ class FeedbackMessage:
     def __init__(self, line1, line2, flags):
         self.lines = [line1, line2]
         self.flags = flags
-        self.icons = decode_feedback_message_flags(flags)
+        self.icons = flags_to_icons(flags)
 
     def icons_that_are_on(self):
-        # TODO: Consistent order
-        return [ k for (k, v) in self.icons.items() if v ]
+        return icons_that_are_on(self.icons)
 
     def log(self, level=logging.INFO):
         _LOGGER.log(level, "Display line 1: '%s'", self.lines[0])
@@ -119,51 +119,6 @@ class FeedbackMessage:
             'zone4_source': zone4_source,
             'zone4_volume': zone4_volume,
         }
-
-def decode_feedback_message_flags(flags):
-    icons = {}
-    icons["A"] = bool(flags[0] & 0x01)
-    icons["5"] = bool(flags[0] & 0x02)
-    icons["4"] = bool(flags[0] & 0x04)
-    icons["3"] = bool(flags[0] & 0x08)
-    icons["2"] = bool(flags[0] & 0x10)
-    icons["1"] = bool(flags[0] & 0x20)
-    icons["Coaxial"] = bool(flags[0] & 0x40)
-    icons["Optical"] = bool(flags[0] & 0x80)
-
-    icons["x"] = bool(flags[1] & 0x01)
-    icons["II"] = bool(flags[1] & 0x02)
-    icons["HDMI"] = bool(flags[1] & 0x04)
-    icons["EX"] = bool(flags[1] & 0x08)
-    icons["ES"] = bool(flags[1] & 0x10)
-    icons["dts"] = bool(flags[1] & 0x20)
-    icons["Pro Logic"] = bool(flags[1] & 0x40)
-    icons["Dolby Digital"] = bool(flags[1] & 0x80)
-
-    icons["Display Mode0"] = bool(flags[2] & 0x01)
-    icons["Display Mode1"] = bool(flags[2] & 0x02)
-    icons["Zone 2"] = bool(flags[2] & 0x04)
-    icons["Standby LED"] = bool(flags[2] & 0x08)
-
-    icons["SB"] = bool(flags[3] & 0x01)
-    icons["Zone 4"] = bool(flags[3] & 0x02)
-    icons["Zone 3"] = bool(flags[3] & 0x04)
-    icons["<"] = bool(flags[3] & 0x08)
-    icons[">"] = bool(flags[3] & 0x10)
-    icons["7.1"] = bool(flags[3] & 0x20)
-    icons["5.1"] = bool(flags[3] & 0x40)
-    icons["Zone"] = bool(flags[3] & 0x80)
-
-    icons["CBL"] = bool(flags[4] & 0x01)
-    icons["CBR"] = bool(flags[4] & 0x02)
-    icons["SW"] = bool(flags[4] & 0x04)
-    icons["SR"] = bool(flags[4] & 0x08)
-    icons["SL"] = bool(flags[4] & 0x10)
-    icons["FR"] = bool(flags[4] & 0x20)
-    icons["C"] = bool(flags[4] & 0x40)
-    icons["FL"] = bool(flags[4] & 0x80)
-
-    return icons
 
 class TriggerMessage:
     def __init__(self, flags):
