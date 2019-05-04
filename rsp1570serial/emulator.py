@@ -106,8 +106,8 @@ def only_if_on(f):
     return wrapper
 
 class RotelRSP1570Emulator:
-    def __init__(self, writer, aliases=None, is_on=False):
-        self._writer = writer
+    def __init__(self, aliases=None, is_on=False):
+        self._writer = None
         self._aliases = {} if aliases is None else aliases
         self._is_on = is_on
         self._is_muted = False
@@ -235,9 +235,20 @@ class RotelRSP1570Emulator:
         payload.extend(icon_list_to_flags(self.icon_list))
         return encode_payload(payload)
 
+    def handle_client_connection(self, writer):
+        if self._writer is not None:
+            logging.info("New client connection received before old connection closed")
+            self._writer = None
+        self._writer = writer
+        logging.info("New client connected")
+
+    def handle_client_disconnection(self):
+        self._writer = None
+        logging.info("Client disconnected")
+
     async def write_feedback_message(self):
         if self._writer is None:
-            logging.info("Write feedback message called before writer set")
+            logging.info("Write feedback message called but no client connected")
         else:
             msg = self.encode_feedback_message()
             self._writer.write(msg)
@@ -332,10 +343,13 @@ async def heartbeat():
         logging.info("Heartbeat cancelled")
 
 def run_server(port, aliases, is_on):
+    device = RotelRSP1570Emulator(aliases, is_on)
+
     async def handle_messages(reader, writer):
-        device = RotelRSP1570Emulator(writer, aliases, is_on)
+        device.handle_client_connection(writer)
         command_handler = CommandHandler(device)
         await command_handler.handle_command_stream(reader)
+        device.handle_client_disconnection()
 
     loop = asyncio.get_event_loop()
     coro = asyncio.start_server(handle_messages, port=port)
