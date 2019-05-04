@@ -236,15 +236,8 @@ class RotelRSP1570Emulator:
         return encode_payload(payload)
 
     def handle_client_connection(self, writer):
-        if self._writer is not None:
-            logging.info("New client connection received before old connection closed")
-            self._writer = None
         self._writer = writer
         logging.info("New client connected")
-
-    def handle_client_disconnection(self):
-        self._writer = None
-        logging.info("Client disconnected")
 
     async def write_feedback_message(self):
         if self._writer is None:
@@ -349,7 +342,6 @@ def run_server(port, aliases, is_on):
         device.handle_client_connection(writer)
         command_handler = CommandHandler(device)
         await command_handler.handle_command_stream(reader)
-        device.handle_client_disconnection()
 
     loop = asyncio.get_event_loop()
     coro = asyncio.start_server(handle_messages, port=port)

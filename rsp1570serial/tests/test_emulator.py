@@ -139,7 +139,6 @@ class AsyncTestEmulatorCommands(aiounittest.AsyncTestCase):
             e.handle_client_connection(writer)
             c = CommandHandler(e)
             await c.apply_simple_command_code('POWER_ON')
-            e.handle_client_disconnection()
         response = await simulate_server_activity(simulate_commands)
         expected = (
             b'\xfe1\xa3 VIDEO 1       VOL  50DOLBY PL\x19 C     48K  \x00F\x08\x00\xfc\xc5'
@@ -153,7 +152,6 @@ class AsyncTestEmulatorCommands(aiounittest.AsyncTestCase):
             c = CommandHandler(e)
             await c.apply_simple_command_code('POWER_ON')
             await c.apply_simple_command_code('VOLUME_UP')
-            e.handle_client_disconnection()
         response = await simulate_server_activity(simulate_commands)
         expected = (
             b'\xfe1\xa3 VIDEO 1       VOL  50DOLBY PL\x19 C     48K  \x00F\x08\x00\xfc\xc5'
@@ -167,7 +165,6 @@ class AsyncTestEmulatorCommands(aiounittest.AsyncTestCase):
             e.handle_client_connection(writer)
             c = CommandHandler(e)
             await c.apply_simple_command_code('DISPLAY_REFRESH')
-            e.handle_client_disconnection()
         response1 = await simulate_server_activity(simulate_commands)
         response2 = await simulate_server_activity(simulate_commands)
         expected = (
