@@ -25,7 +25,7 @@ async def main(loop, serial_port, subtask_builder):
 
         conn.close()
 
-async def heartbeat():
+async def heartbeat_loop():
     """
     Tells you that the loop is still running
     Also keeps the KeyboardInterrupt running on Windows until Python 3.8 comes along (https://bugs.python.org/issue23057)
@@ -47,7 +47,7 @@ def example_runner(build_example_tasks, serial_port=None, heartbeat=True):
     main_task = loop.create_task(main(loop, serial_port, build_example_tasks))
     #pylint: disable=unused-variable
     if heartbeat:
-        heartbeat_task = loop.create_task(heartbeat())
+        heartbeat_task = loop.create_task(heartbeat_loop())
 
     try:
         loop.run_forever()
