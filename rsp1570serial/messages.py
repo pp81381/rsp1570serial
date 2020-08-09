@@ -4,7 +4,7 @@ from rsp1570serial.protocol import decode_protocol_stream, encode_payload
 
 _LOGGER = logging.getLogger(__name__)
 
-DEVICE_ID_RSP1570 = 0xa3
+DEVICE_ID_RSP1570 = 0xA3
 
 MSGTYPE_PRIMARY_COMMANDS = 0x10
 MSGTYPE_MAIN_ZONE_COMMANDS = 0x14
@@ -20,8 +20,10 @@ MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS = 0x33
 MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS = 0x34
 MSGTYPE_TRIGGER_DIRECT_COMMANDS = 0x40
 
+
 class RotelMessageError(Exception):
     pass
+
 
 class FeedbackMessage:
     def __init__(self, line1, line2, flags):
@@ -62,16 +64,19 @@ class FeedbackMessage:
         zone3_volume = None
         zone4_source = None
         zone4_volume = None
-    
+
         line0 = self.lines[0]
         if len(line0) != 21:
             _LOGGER.error("Display line 1 must be exactly 21 bytes")
-        if line0 == '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00':
+        if (
+            line0
+            == "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        ):
             is_on = False
         else:
             is_on = True
             source_name = line0[:8].rstrip()
-            party_mode_on = line0[10:13] == 'pty'
+            party_mode_on = line0[10:13] == "pty"
             vol_str = line0[14:]
             if (vol_str == "MUTE ON") or (vol_str == "       "):
                 mute_on = True
@@ -85,10 +90,13 @@ class FeedbackMessage:
         line1 = self.lines[1]
         if len(line1) != 21:
             _LOGGER.error("Display line 2 must be exactly 21 bytes")
-        if line1 == '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00':
+        if (
+            line1
+            == "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        ):
             pass
         else:
-            info = line1.strip().replace('\x19', 'II')
+            info = line1.strip().replace("\x19", "II")
             if line1[:9] == "  REC    ":
                 rec_source = line1[9:].rstrip()
             elif line1[:9] == "  ZONE2  ":
@@ -105,37 +113,38 @@ class FeedbackMessage:
                 zone4_volume = int(line1[14:16])
 
         return {
-            'is_on' : is_on,
-            'source_name': source_name,
-            'volume': volume,
-            'mute_on': mute_on,
-            'party_mode_on': party_mode_on,
-            'info': info,
-            'rec_source': rec_source,
-            'zone2_source': zone2_source,
-            'zone2_volume': zone2_volume,
-            'zone3_source': zone3_source,
-            'zone3_volume': zone3_volume,
-            'zone4_source': zone4_source,
-            'zone4_volume': zone4_volume,
+            "is_on": is_on,
+            "source_name": source_name,
+            "volume": volume,
+            "mute_on": mute_on,
+            "party_mode_on": party_mode_on,
+            "info": info,
+            "rec_source": rec_source,
+            "zone2_source": zone2_source,
+            "zone2_volume": zone2_volume,
+            "zone3_source": zone3_source,
+            "zone3_volume": zone3_volume,
+            "zone4_source": zone4_source,
+            "zone4_volume": zone4_volume,
         }
+
 
 class TriggerMessage:
     def __init__(self, flags):
         self.flags = flags
-    
+
     def log(self, level=logging.INFO):
         _LOGGER.log(level, self.flags_to_list(self.flags))
 
     @classmethod
     def _flag_to_list(cls, flag):
         out = []
-        out.append('on' if flag & 0x01 else 'off')
-        out.append('on' if flag & 0x02 else 'off')
-        out.append('on' if flag & 0x04 else 'off')
-        out.append('on' if flag & 0x08 else 'off')
-        out.append('on' if flag & 0x10 else 'off')
-        out.append('on' if flag & 0x20 else 'off')
+        out.append("on" if flag & 0x01 else "off")
+        out.append("on" if flag & 0x02 else "off")
+        out.append("on" if flag & 0x04 else "off")
+        out.append("on" if flag & 0x08 else "off")
+        out.append("on" if flag & 0x10 else "off")
+        out.append("on" if flag & 0x20 else "off")
         return out
 
     @classmethod
@@ -148,20 +157,24 @@ class TriggerMessage:
         out.append(["Zone 4", cls._flag_to_list(flags[4])])
         return out
 
+
 class CommandMessage:
     def __init__(self, message_type, key):
         self.message_type = message_type
         self.key = key
 
+
 def feedback_message_handler(message_type, data):
     assert message_type == MSGTYPE_FEEDBACK_STRING
-    display_line1_bytes = data[0:21] # The II is char 0x19
+    display_line1_bytes = data[0:21]  # The II is char 0x19
     display_line2_bytes = data[21:42]
     flags = data[42:47]
     return FeedbackMessage(
-        display_line1_bytes.decode(encoding='ascii'),
-        display_line2_bytes.decode(encoding='ascii'),
-        flags)
+        display_line1_bytes.decode(encoding="ascii"),
+        display_line2_bytes.decode(encoding="ascii"),
+        flags,
+    )
+
 
 # OFF Data was: bytearray(b'\x00\x00\x00\x00\x00')
 # ON  Data was: bytearray(b'\x01\x01\x00\x00\x00')
@@ -170,12 +183,18 @@ def trigger_message_handler(message_type, data):
     assert len(data) == 5
     return TriggerMessage(data)
 
+
 def command_message_handler(message_type, data):
     return CommandMessage(message_type, data)
 
+
 def decode_message(payload):
     if payload[0] != DEVICE_ID_RSP1570:
-        raise RotelMessageError("Didn't get expected Device ID byte.  {} != {}".format(payload[0], DEVICE_ID_RSP1570))
+        raise RotelMessageError(
+            "Didn't get expected Device ID byte.  {} != {}".format(
+                payload[0], DEVICE_ID_RSP1570
+            )
+        )
 
     message_handlers = {
         MSGTYPE_FEEDBACK_STRING: feedback_message_handler,
@@ -196,24 +215,11 @@ def decode_message(payload):
     message_handler = message_handlers.get(message_type, None)
     if message_handler is None:
         raise RotelMessageError("Unknown message type byte {:X}".format(message_type))
-    
+
     data = payload[2:]
     return message_handler(message_type, data)
 
-class DecodeMessageIter:
-    def __init__(self, ser):
-        self.decoder = decode_protocol_stream(ser)
 
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        payload = await self.decoder.__anext__()
-        return decode_message(payload)
-
-def decode_message_stream(ser):
-    return DecodeMessageIter(ser)
-
-# async def decode_message_stream(ser):
-#     async for payload in decode_protocol_stream(ser):
-#         yield decode_message(payload)
+async def decode_message_stream(ser):
+    async for payload in decode_protocol_stream(ser):
+        yield decode_message(payload)

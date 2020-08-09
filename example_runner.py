@@ -1,29 +1,27 @@
 import asyncio
+import base64
 import logging
-from rsp1570serial.connection import RotelAmpConn
-from rsp1570serial.utils import get_platform_serial_port
+from rsp1570serial.messages import FeedbackMessage, TriggerMessage
+from rsp1570serial.protocol import decode_protocol_stream
 
-async def main(loop, serial_port, subtask_builder):
-    try:
-        conn = RotelAmpConn(serial_port)
-        await conn.open()
-    except:
-        logging.error("Could not open connection", exc_info=True)
+
+async def run_and_log_task(main_task, conn, heartbeat=True, log_payload=False):
+    tasks = {main_task}
+    if log_payload:
+        tasks.add(asyncio.create_task(payload_logger(conn)))
     else:
-        tasks = subtask_builder(conn)
+        tasks.add(asyncio.create_task(message_logger(conn)))
+    if heartbeat:
+        tasks.add(asyncio.create_task(heartbeat_loop()))
+    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    for pending_task in pending:
+        pending_task.cancel()
+    for done_task in done:
+        try:
+            await done_task
+        except:
+            logging.error("Unexpected exception thrown by subtask", exc_info=True)
 
-        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
-
-        for pending_task in pending:
-            pending_task.cancel()
-
-        for done_task in done:
-            try:
-                await done_task
-            except:
-                logging.error("Unexpected exception thrown by subtask", exc_info=True)
-
-        conn.close()
 
 async def heartbeat_loop():
     """
@@ -39,30 +37,32 @@ async def heartbeat_loop():
     except asyncio.CancelledError:
         logging.info("Heartbeat cancelled")
 
-def example_runner(build_example_tasks, serial_port=None, heartbeat=True):
-    if serial_port is None:
-        serial_port = get_platform_serial_port()
 
-    loop = asyncio.get_event_loop()
-    main_task = loop.create_task(main(loop, serial_port, build_example_tasks))
-    #pylint: disable=unused-variable
-    if heartbeat:
-        heartbeat_task = loop.create_task(heartbeat_loop())
+async def send_command_and_log(conn, command_name):
+    await conn.send_command(command_name)
+    logging.info(command_name)
 
+
+async def send_volume_direct_command_and_log(conn, zone, volume):
+    await conn.send_volume_direct_command(zone, volume)
+    logging.info("send_volume_direct(zone=%d, volume=%d)", zone, volume)
+
+
+async def payload_logger(conn):
     try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        logging.info("Shutting down due to keyboard interrupt")
+        async for payload in decode_protocol_stream(conn.reader):
+            logging.info("response payload: %r", payload)
+            logging.info("response payload base64: %s", base64.b64encode(payload))
+    except asyncio.CancelledError:
+        logging.info("Message reader cancelled")
 
-    if main_task.done():
-        logging.info("Main Task is done")
-        exc = main_task.exception()
-        if exc:
-            logging.error("Main Task had an exception", exc_info=exc)
 
-    pending = asyncio.Task.all_tasks(loop=loop)
-    for pending_task in pending:
-        pending_task.cancel()
-    group = asyncio.gather(*pending, return_exceptions=True)
-    loop.run_until_complete(group)
-    loop.close()
+async def message_logger(conn):
+    try:
+        async for message in conn.read_messages():
+            if isinstance(message, (FeedbackMessage, TriggerMessage)):
+                message.log()
+            else:
+                logging.warning("Unknown message type encountered")
+    except asyncio.CancelledError:
+        logging.info("Message reader cancelled")
