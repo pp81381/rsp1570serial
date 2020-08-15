@@ -15,7 +15,7 @@ async def start_emulator(device, port=TEST_PORT):
 
 
 class AsyncTestDiscovery(aiounittest.AsyncTestCase):
-    async def test_process_command3(self):
+    async def test_discover_source_aliases(self):
         aliases = {
             "VIDEO 1": "CATV",
             "VIDEO 2": "NMT",

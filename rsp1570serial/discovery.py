@@ -51,53 +51,61 @@ async def discover_source_aliases(serial_port=None):
         serial_port = get_platform_serial_port()
 
     async with create_shared_rotel_amp_conn(serial_port) as shared_conn:
-        conn = shared_conn.new_client_conn()
+        return await discover_source_aliases_ll(shared_conn.new_client_conn())
 
-        # If no messages are received then the Amp is probably off
-        messages = await conn.process_command("DISPLAY_REFRESH")
-        was_probably_off = len(messages) == 0
-        _LOGGER.info(f"was_probably_off: '{was_probably_off}'")
 
-        if was_probably_off:
-            # Note that:
-            # - If the power is already on then there is no Feedback message
-            # - If the power is off then it is a few seconds before the messages come through
-            # - POWER_ON has the side effect of un-muting
-            _LOGGER.info("Power appears to be off so trying to turn on")
-            messages = await conn.process_command("POWER_ON", conn.POWER_ON_TIME_WINDOW)
+async def discover_source_aliases_ll(conn):
+    """
+    Low level implementation of source alias discovery
 
-        orig_source_alias = get_source_name_from_messages(messages)
-        _LOGGER.info(f"orig_source_alias: '{orig_source_alias}'")
+    conn should be a SharedRotelAmpClientConn object
+    """
 
-        orig_mute_on = get_mute_on_from_messages(messages)
-        _LOGGER.info(f"orig_mute_on: '{orig_mute_on}'")
-        if not orig_mute_on:
-            _LOGGER.info("Muting to avoid loud surprises")
-            await conn.process_command("MUTE_TOGGLE")
+    # If no messages are received then the Amp is probably off
+    messages = await conn.process_command("DISPLAY_REFRESH")
+    was_probably_off = len(messages) == 0
+    _LOGGER.info(f"was_probably_off: '{was_probably_off}'")
 
-        source_map = {}
-        for source_name, command_code in ROTEL_RSP1570_SOURCES.items():
-            messages = await conn.process_command(command_code)
-            source_alias = get_source_name_from_messages(messages)
-            _LOGGER.info(f"Alias for '{source_name}': '{source_alias}'")
-            source_map[source_alias] = command_code
+    if was_probably_off:
+        # Note that:
+        # - If the power is already on then there is no Feedback message
+        # - If the power is off then it is a few seconds before the messages come through
+        # - POWER_ON has the side effect of un-muting
+        _LOGGER.info("Power appears to be off so trying to turn on")
+        messages = await conn.process_command("POWER_ON", conn.POWER_ON_TIME_WINDOW)
 
-        messages = await conn.process_command(source_map[orig_source_alias])
-        final_source_alias = get_source_name_from_messages(messages)
-        _LOGGER.info(f"Final source alias: '{final_source_alias}'")
+    orig_source_alias = get_source_name_from_messages(messages)
+    _LOGGER.info(f"orig_source_alias: '{orig_source_alias}'")
 
-        if final_source_alias != orig_source_alias:
-            _LOGGER.warning(
-                "RSP 1570 was not set back to the original source after alias discovery"
-            )
+    orig_mute_on = get_mute_on_from_messages(messages)
+    _LOGGER.info(f"orig_mute_on: '{orig_mute_on}'")
+    if not orig_mute_on:
+        _LOGGER.info("Muting to avoid loud surprises")
+        await conn.process_command("MUTE_TOGGLE")
 
-        if was_probably_off:
-            _LOGGER.info(
-                "Power appeared to be off initially so turning back off before we finish"
-            )
-            await conn.process_command("POWER_OFF")
-        elif not orig_mute_on:
-            _LOGGER.info("Unmuting")
-            await conn.process_command("MUTE_TOGGLE")
+    source_map = {}
+    for source_name, command_code in ROTEL_RSP1570_SOURCES.items():
+        messages = await conn.process_command(command_code)
+        source_alias = get_source_name_from_messages(messages)
+        _LOGGER.info(f"Alias for '{source_name}': '{source_alias}'")
+        source_map[source_alias] = command_code
+
+    messages = await conn.process_command(source_map[orig_source_alias])
+    final_source_alias = get_source_name_from_messages(messages)
+    _LOGGER.info(f"Final source alias: '{final_source_alias}'")
+
+    if final_source_alias != orig_source_alias:
+        _LOGGER.warning(
+            "RSP 1570 was not set back to the original source after alias discovery"
+        )
+
+    if was_probably_off:
+        _LOGGER.info(
+            "Power appeared to be off initially so turning back off before we finish"
+        )
+        await conn.process_command("POWER_OFF")
+    elif not orig_mute_on:
+        _LOGGER.info("Unmuting")
+        await conn.process_command("MUTE_TOGGLE")
 
     return source_map
