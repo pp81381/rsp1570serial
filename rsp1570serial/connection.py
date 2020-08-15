@@ -3,12 +3,16 @@ from contextlib import asynccontextmanager
 import logging
 from rsp1570serial.commands import encode_command, encode_volume_direct_command
 from rsp1570serial.messages import decode_message_stream
-from serial import PARITY_NONE, STOPBITS_ONE
+from serial import PARITY_NONE, STOPBITS_ONE, SerialException
 from serial_asyncio import open_serial_connection
 import uuid
 import weakref
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class RotelAmpConnConnectionError(Exception):
+    pass
 
 
 class RotelAmpConn:
@@ -26,13 +30,16 @@ class RotelAmpConn:
 
     async def open(self):
         if not self.is_open:
-            self.reader, self.writer = await open_serial_connection(
-                url=self.serial_port,
-                baudrate=115200,
-                timeout=None,
-                parity=PARITY_NONE,
-                stopbits=STOPBITS_ONE,
-            )
+            try:
+                self.reader, self.writer = await open_serial_connection(
+                    url=self.serial_port,
+                    baudrate=115200,
+                    timeout=None,
+                    parity=PARITY_NONE,
+                    stopbits=STOPBITS_ONE,
+                )
+            except SerialException as exc:
+                raise RotelAmpConnConnectionError(str(exc)) from exc
             self.is_open = True
 
     def close(self):
