@@ -8,8 +8,10 @@ from rsp1570serial.emulator import (
     INITIAL_SOURCE,
     INITIAL_VOLUME,
 )
+from serial import SerialException
 
 TEST_PORT = 50050
+BAD_TEST_PORT = TEST_PORT + 1
 
 
 @asynccontextmanager
@@ -121,3 +123,20 @@ class AsyncTestConnection(aiounittest.AsyncTestCase):
                     self.assertEqual(conn1.queue.qsize(), 3)
                     self.assertEqual(conn3.queue.qsize(), 3)
 
+    async def test_connection_failure1(self):
+        shared_conn = SharedRotelAmpConn(f"socket://:{BAD_TEST_PORT}")
+        with self.assertRaises(SerialException):
+            # Connection refused by host
+            await shared_conn.open()
+
+    async def test_connection_failure2(self):
+        shared_conn = SharedRotelAmpConn(f"socket://192.168.51.1:{TEST_PORT}")
+        with self.assertRaises(SerialException):
+            # Timed out due to made up IP address
+            await shared_conn.open()
+
+    async def test_connection_failure3(self):
+        shared_conn = SharedRotelAmpConn(f"socket://made_up_hostname:{TEST_PORT}")
+        with self.assertRaises(SerialException):
+            # getaddrinfo failed
+            await shared_conn.open()
