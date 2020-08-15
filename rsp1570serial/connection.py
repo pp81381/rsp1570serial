@@ -76,8 +76,9 @@ class SharedRotelAmpConn:
 
     async def close(self):
         self.conn.close()
-        await self.task
-        self.task = None
+        if self.task is not None:
+            await self.task
+            self.task = None
 
     def new_client_conn(self):
         conn = SharedRotelAmpClientConn(self)
