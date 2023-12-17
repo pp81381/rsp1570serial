@@ -10,13 +10,11 @@ jobs:
 
 - job: 'Test'
   pool:
-    vmImage: 'Ubuntu-16.04'
+    vmImage: 'ubuntu-latest'
   strategy:
     matrix:
-      Python37:
-        python.version: '3.7'
-      Python38:
-        python.version: '3.8'
+      Python311:
+        python.version: '3.11'
     maxParallel: 4
 
   steps:
@@ -24,6 +22,7 @@ jobs:
     inputs:
       versionSpec: '$(python.version)'
       architecture: 'x64'
+    displayName: 'Use Python $(python.version)'
 
   - script: python -m pip install --upgrade pip && pip install -r requirements.txt
     displayName: 'Install dependencies'
@@ -42,13 +41,14 @@ jobs:
 - job: 'Publish'
   dependsOn: 'Test'
   pool:
-    vmImage: 'Ubuntu-16.04'
+    vmImage: 'ubuntu-latest'
 
   steps:
   - task: UsePythonVersion@0
     inputs:
-      versionSpec: '3.7'
+      versionSpec: '3.11'
       architecture: 'x64'
+    displayName: 'Use Python 3.11'
 
   - script: python -m pip install --upgrade setuptools wheel
     displayName: 'Install wheel and ensure that setuptools is up to date'
