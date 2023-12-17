@@ -3,7 +3,9 @@ import asyncio
 from contextlib import asynccontextmanager
 from functools import wraps
 import logging
-from rsp1570serial.commands import messages
+from weakref import WeakSet
+
+from rsp1570serial.commands import MESSAGES
 from rsp1570serial.icons import icon_list_to_flags
 from rsp1570serial.messages import (
     decode_message_stream,
@@ -156,6 +158,7 @@ class RotelRSP1570Emulator:
         self._is_party_mode = False
         self._volume = INITIAL_VOLUME
         self._source = INITIAL_SOURCE
+        self._observers = WeakSet()
 
     @only_if_on
     async def turn_off(self):
@@ -287,27 +290,25 @@ class RotelRSP1570Emulator:
         payload.extend(icon_list_to_flags(self.icon_list))
         return encode_payload(payload)
 
-    def handle_client_connection(self, writer):
-        self._writer = writer
-        logging.info("New client connected")
+    def add_observer(self, writer):
+        self._observers.add(writer)
+        logging.info("New observer")
 
-    def handle_client_disconnection(self):
-        self._writer = None
-        logging.info("Client disconnected")
+    def remove_observer(self, writer):
+        self._observers.remove(writer)
+        logging.info("Removed observer")
 
     async def write_feedback_message(self):
-        if self._writer is None:
-            logging.info("Write feedback message called but no client connected")
-        else:
-            msg = self.encode_feedback_message()
-            self._writer.write(msg)
-            await self._writer.drain()
-            logging.info("Feedback message written: %r", msg)
+        msg = self.encode_feedback_message()
+        for writer in self._observers:
+            writer.write(msg)
+            await writer.drain()
+        logging.info("Feedback message written: %r", msg)
 
 
 def index_command_messages():
     command_code_lookup = {}
-    for code, value in messages.items():
+    for code, value in MESSAGES.items():
         command_code_lookup[bytes(value)] = code
     return command_code_lookup
 
@@ -322,7 +323,7 @@ class CommandHandler:
             if isinstance(message, CommandMessage):
                 await self.handle_command(message)
             else:
-                logging.warning("Unknown message type encountered")
+                logging.warning("Unexpected message type encountered")
 
     async def handle_command(self, command):
         if command.message_type in VOLUME_DIRECT_MESSAGE_TYPES:
@@ -409,12 +410,13 @@ async def heartbeat():
         logging.info("Heartbeat cancelled")
 
 
-def make_message_handler(device):
+def make_message_handler(device: RotelRSP1570Emulator):
     async def handle_messages(reader, writer):
-        device.handle_client_connection(writer)
+        device.add_observer(writer)
         command_handler = CommandHandler(device)
         await command_handler.handle_command_stream(reader)
-        device.handle_client_disconnection()
+        device.remove_observer(writer)
+        writer.close()
 
     return handle_messages
 

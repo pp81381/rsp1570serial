@@ -22,7 +22,7 @@ MIN_VOLUME = 0x00
 MAX_VOLUME = 0x60
 
 # [message_type, key] pairs
-messages = {
+MESSAGES = {
     "POWER_TOGGLE": [MSGTYPE_PRIMARY_COMMANDS, 0x0A],
     "POWER_OFF": [MSGTYPE_PRIMARY_COMMANDS, 0x4A],
     "POWER_ON": [MSGTYPE_PRIMARY_COMMANDS, 0x4B],
@@ -267,7 +267,7 @@ messages = {
 
 
 def encode_command(command_name):
-    [message_type, key] = messages[command_name]
+    [message_type, key] = MESSAGES[command_name]
     return encode_payload([DEVICE_ID_RSP1570, message_type, key])
 
 

@@ -31,7 +31,11 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
         self.assertEqual(command.message_type, MSGTYPE_PRIMARY_COMMANDS)
         self.assertEqual(command.key, b"\x0a")
         self.assertEqual(
-            cm.output, ["INFO:rsp1570serial.protocol:Finished reading messages"]
+            cm.output,
+            [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
+            ],
         )
 
     async def test_encode_decode_with_meta(self):
@@ -41,7 +45,11 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
         self.assertEqual(command.message_type, MSGTYPE_VOLUME_DIRECT_COMMANDS)
         self.assertEqual(command.key, b"\x28")
         self.assertEqual(
-            cm.output, ["INFO:rsp1570serial.protocol:Finished reading messages"]
+            cm.output,
+            [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
+            ],
         )
 
     async def test_decode_feedback_message(self):
@@ -69,7 +77,11 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
             ],
         )
         self.assertEqual(
-            cm.output, ["INFO:rsp1570serial.protocol:Finished reading messages"]
+            cm.output,
+            [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
+            ],
         )
         fields = display.parse_display_lines()
         self.assertEqual(fields["is_on"], True)
@@ -103,7 +115,11 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
         )
         self.assertCountEqual(display.icons_that_are_on(), ["Standby LED"])
         self.assertEqual(
-            cm.output, ["INFO:rsp1570serial.protocol:Finished reading messages"]
+            cm.output,
+            [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
+            ],
         )
         fields = display.parse_display_lines()
         self.assertEqual(fields["is_on"], False)
@@ -251,7 +267,11 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
             ],
         )
         self.assertEqual(
-            cm.output, ["INFO:rsp1570serial.protocol:Finished reading messages"]
+            cm.output,
+            [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
+            ],
         )
 
     async def test_decode_trigger_message(self):
@@ -263,7 +283,8 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
         self.assertEqual(
             cm.output,
             [
-                "INFO:rsp1570serial.protocol:Finished reading messages",
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
                 "INFO:rsp1570serial.messages:["
                 "['All', ['on', 'off', 'off', 'off', 'off', 'off']], "
                 "['Main', ['on', 'off', 'off', 'off', 'off', 'off']], "
@@ -315,11 +336,15 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
             ],
         )
         self.assertEqual(
-            cm.output, ["INFO:rsp1570serial.protocol:Finished reading messages"]
+            cm.output,
+            [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
+            ],
         )
 
     async def test_decode_stream2(self):
-        """ Deliberately removed the start byte from the first message.  Rest of first message will be reported as unexpected bytes. """
+        """Deliberately removed the start byte from the first message.  Rest of first message will be reported as unexpected bytes."""
         ser = StreamProxy(
             b"1\xa3 FIRE TV       VOL  64DOLBY PL\x19 C     48K  \x00F\x08\x00\xfc\xf2\xfe1\xa3 CATV          VOL  63DOLBY PL\x19 M     48K  \x00F\x08\x00\xfc\x99"
         )
@@ -346,13 +371,14 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
         self.assertEqual(
             cm.output,
             [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
                 "WARNING:rsp1570serial.protocol:51 unexpected bytes encountered while waiting for START_BYTE: bytearray(b'1\\xa3 FIRE TV       VOL  64DOLBY PL\\x19 C     48K  \\x00F\\x08\\x00\\xfc\\xf2')",
-                "INFO:rsp1570serial.protocol:Finished reading messages",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
             ],
         )
 
     async def test_decode_stream3(self):
-        """ Deliberately close early.  Close method will report discarded payload. """
+        """Deliberately close early.  Close method will report discarded payload."""
         ser = StreamProxy(
             b"\xfe1\xa3 FIRE TV       VOL  64DOLBY PL\x19 C     48K  \x00F\x08\x00\xfc\xf2\xfe1\xa3 CATV          VOL  63DOLBY PL\x19 M     48K  \x00F\x08\x00\xfc"
         )
@@ -379,8 +405,9 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
         self.assertEqual(
             cm.output,
             [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
                 "ERROR:rsp1570serial.protocol:Unexpected EOF encountered.  Work in progress discarded: bytearray(b'1\\xa3 CATV          VOL  63DOLBY PL\\x19 M     48K  \\x00F\\x08\\x00\\xfc')",
-                "INFO:rsp1570serial.protocol:Finished reading messages",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
             ],
         )
 
@@ -399,9 +426,10 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
         self.assertEqual(
             cm.output,
             [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
                 "ERROR:rsp1570serial.protocol:Invalid byte encountered while processing message content.  Work in progress discarded: bytearray(b'1\\xa3 FIRE TV       VOL  64DOLBY PL\\x19 C     48K  \\x00F\\x08\\x00\\xfc')",
                 "WARNING:rsp1570serial.protocol:51 unexpected bytes discarded when EOF encountered: bytearray(b'1\\xa3 CATV          VOL  63DOLBY PL\\x19 M     48K  \\x00F\\x08\\x00\\xfc\\x99')",
-                "INFO:rsp1570serial.protocol:Finished reading messages",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
             ],
         )
 
@@ -438,9 +466,9 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
         self.assertEqual(
             cm.output,
             [
+                "INFO:rsp1570serial.protocol:Started decoding protocol stream",
                 "ERROR:rsp1570serial.protocol:Invalid byte encountered while processing message content.  Work in progress discarded: bytearray(b'1\\xa3 FIRE TV       VOL  64DOLBY PL\\x19 C     48K  \\x00F\\x08\\x00\\xfc')",
                 "WARNING:rsp1570serial.protocol:51 unexpected bytes encountered while waiting for START_BYTE: bytearray(b'1\\xa3 CATV          VOL  63DOLBY PL\\x19 M     48K  \\x00F\\x08\\x00\\xfc\\x99')",
-                "INFO:rsp1570serial.protocol:Finished reading messages",
+                "INFO:rsp1570serial.protocol:Finished decoding protocol stream",
             ],
         )
-

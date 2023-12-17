@@ -1,6 +1,6 @@
 import logging
 from rsp1570serial.icons import flags_to_icons, icons_that_are_on
-from rsp1570serial.protocol import decode_protocol_stream, encode_payload
+from rsp1570serial.protocol import decode_protocol_stream
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -290,7 +290,7 @@ class AsyncTestEmulatorCommands(aiounittest.AsyncTestCase):
         e = RotelRSP1570Emulator()
 
         async def simulate_commands(writer):
-            e.handle_client_connection(writer)
+            e.add_observer(writer)
             c = CommandHandler(e)
             await c.apply_simple_command_code("POWER_ON")
 
@@ -302,7 +302,7 @@ class AsyncTestEmulatorCommands(aiounittest.AsyncTestCase):
         e = RotelRSP1570Emulator()
 
         async def simulate_commands(writer):
-            e.handle_client_connection(writer)
+            e.add_observer(writer)
             c = CommandHandler(e)
             await c.apply_simple_command_code("POWER_ON")
             await c.apply_simple_command_code("VOLUME_UP")
@@ -318,7 +318,7 @@ class AsyncTestEmulatorCommands(aiounittest.AsyncTestCase):
         e = RotelRSP1570Emulator(is_on=True)
 
         async def simulate_commands(writer):
-            e.handle_client_connection(writer)
+            e.add_observer(writer)
             c = CommandHandler(e)
             await c.apply_simple_command_code("DISPLAY_REFRESH")
 
@@ -329,4 +329,3 @@ class AsyncTestEmulatorCommands(aiounittest.AsyncTestCase):
         self.assertEqual(
             response2, expected
         )  # E.g. state hasn't changed after reconnect
-

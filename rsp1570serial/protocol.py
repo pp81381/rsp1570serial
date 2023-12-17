@@ -62,7 +62,12 @@ class ProtocolDecoder:
         self.bytes_received = 0
 
     async def next_char_without_meta_decoding(self):
-        b = await self.ser.read(1)
+        try:
+            b = await self.ser.read(1)
+        except ConnectionResetError:
+            raise RotelEOFError(
+                "Connection reset by peer after {} bytes".format(self.bytes_received)
+            )
         if len(b) == 0:
             raise RotelEOFError(
                 "Encountered EOF after {} bytes".format(self.bytes_received)
@@ -151,6 +156,7 @@ class ProtocolDecoder:
 
 
 async def decode_protocol_stream(ser):
+    _LOGGER.info("Started decoding protocol stream")
     decoder = ProtocolDecoder(ser)
     while True:
         try:
@@ -161,7 +167,7 @@ async def decode_protocol_stream(ser):
             break
         else:
             yield payload
-    _LOGGER.info("Finished reading messages")
+    _LOGGER.info("Finished decoding protocol stream")
 
 
 def encode_payload(payload):

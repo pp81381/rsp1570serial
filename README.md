@@ -159,7 +159,7 @@ Use the `create_shared_rotel_amp_conn` context manager as a factory:
 
         async with create_shared_rotel_amp_conn(serial_port) as shared_conn:
             logger_conn = shared_conn.new_client_conn()
-            logger_task = asyncio.create_task(do_something_else(logger_conn)
+            logger_task = asyncio.create_task(do_something_else(logger_conn))
             cmd_conn = shared_conn.new_client_conn()
             await cmd_conn.process_command('POWER_ON', conn.POWER_ON_TIME_WINDOW)
             await cmd_conn.process_command('SOURCE_VIDEO_1')
