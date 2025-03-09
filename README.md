@@ -37,7 +37,7 @@ The serial_port parameter can be anything that can be passed to `serial.serial_f
 * `COM3` (Windows)
 * `socket://192.168.0.100:50000` (if you are using a TCP/IP to serial  converter)
 
-An exception of type `RotelAmpConnConnectionError` is thrown if a connection cannot be made to the specified device.
+An exception is thrown if a connection cannot be made to the specified device.
 
 ## send_command(command_code)
 
@@ -137,7 +137,7 @@ Use the `create_rotel_amp_conn` context manager as a factory:
 
 Method|Description
 ---|---
-`create_rotel_amp_conn(serial_port)`| Context manager to create and open a connection
+`create_rotel_amp_conn(serial_port, device_id=DEVICE_ID_RSP1570)`| Context manager to create and open a connection.   Device id can be DEVICE_ID_RSP1572.
 `conn.send_command(command_code)`| Send a command (see `commands.py` for the full list)
 `conn.send_volume_direct_command(zone, volume)`| Set the absolute volume in a zone
 `conn.read_messages()`| Iterator that reads the messages from the device.   See [read_messages](#read_messages) for more information.
@@ -313,6 +313,7 @@ Option|Description
 --|--
 `-p <num>` or `--port <num>`|Port number
 `-o` or `--is_on`|If set then the emulator will be turned on initially
+`-m <rsp1570 or rsp1572>` or `--model <rsp1570 or rsp1572>`|Device model
 `--cd <str>` or `--alias_cd <str>`|Alias for the CD source
 `--tape <str>` or `--alias_tape <str>`|Alias for the TAPE source
 `--tuner <str>` or `--alias_tuner <str>`|Alias for the TUNER source
