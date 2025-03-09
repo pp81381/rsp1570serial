@@ -80,13 +80,14 @@ async def create_rotel_amp_conn(*args, **kwargs):
 class SharedRotelAmpConn:
     """Connection to a Rotel Amp that supports multiple clients"""
 
-    def __init__(self, serial_port):
+    def __init__(self, serial_port, device_id=DEVICE_ID_RSP1570):
         self.serial_port = serial_port
+        self.device_id = device_id
         self._conn = None
         self._clients = None
 
     async def open(self):
-        self._conn = RotelAmpConn(self.serial_port)
+        self._conn = RotelAmpConn(self.serial_port, self.device_id)
         self._clients = WeakSet()
         await self._conn.open()
 
@@ -193,13 +194,14 @@ class SharedRotelAmpClientConn:
 class RotelAmpMessageProcessor:
     """Processes messages in a background task"""
 
-    def __init__(self, serial_port):
+    def __init__(self, serial_port, device_id=DEVICE_ID_RSP1570):
         self.serial_port = serial_port
+        self.device_id = device_id
         self._conn = None
         self._task = None
 
     async def open(self):
-        self._conn = SharedRotelAmpConn(self.serial_port)
+        self._conn = SharedRotelAmpConn(self.serial_port, self.device_id)
         await self._conn.open()
         self._task = asyncio.create_task(self._conn.process_messages())
 

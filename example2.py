@@ -1,10 +1,12 @@
 import asyncio
+import logging
+
 from example_runner import (
     run_and_log_task,
     send_command_and_log,
     send_volume_direct_command_and_log,
 )
-import logging
+from rsp1570serial import DEVICE_ID_RSP1570
 from rsp1570serial.connection import create_shared_rotel_amp_conn
 from rsp1570serial.utils import get_platform_serial_port
 
@@ -62,7 +64,9 @@ async def run_example_mute_commands(conn):
 async def main(serial_port=None, heartbeat=True, log_payload=False):
     if serial_port is None:
         serial_port = get_platform_serial_port()
-    async with create_shared_rotel_amp_conn(serial_port) as shared_conn:
+    async with create_shared_rotel_amp_conn(
+        serial_port, DEVICE_ID_RSP1570
+    ) as shared_conn:
         conn = shared_conn.new_client_conn()
         main_task = asyncio.create_task(run_example_mute_commands(conn))
         await run_and_log_task(main_task, conn, heartbeat, log_payload)
