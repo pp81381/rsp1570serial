@@ -2,21 +2,20 @@
 Definitions relating to commands and the command encoder.
 """
 
-from rsp1570serial.protocol import encode_payload
 from rsp1570serial.messages import (
-    DEVICE_ID_RSP1570,
-    MSGTYPE_PRIMARY_COMMANDS,
     MSGTYPE_MAIN_ZONE_COMMANDS,
+    MSGTYPE_PRIMARY_COMMANDS,
     MSGTYPE_RECORD_SOURCE_COMMANDS,
-    MSGTYPE_ZONE_2_COMMANDS,
-    MSGTYPE_ZONE_3_COMMANDS,
-    MSGTYPE_ZONE_4_COMMANDS,
-    MSGTYPE_VOLUME_DIRECT_COMMANDS,
-    MSGTYPE_ZONE_2_VOLUME_DIRECT_COMMANDS,
-    MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS,
-    MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS,
     MSGTYPE_TRIGGER_DIRECT_COMMANDS,
+    MSGTYPE_VOLUME_DIRECT_COMMANDS,
+    MSGTYPE_ZONE_2_COMMANDS,
+    MSGTYPE_ZONE_2_VOLUME_DIRECT_COMMANDS,
+    MSGTYPE_ZONE_3_COMMANDS,
+    MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS,
+    MSGTYPE_ZONE_4_COMMANDS,
+    MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS,
 )
+from rsp1570serial.protocol import encode_payload
 
 MIN_VOLUME = 0x00
 MAX_VOLUME = 0x60
@@ -266,12 +265,12 @@ MESSAGES = {
 }
 
 
-def encode_command(command_name):
+def encode_command(device_id, command_name):
     [message_type, key] = MESSAGES[command_name]
-    return encode_payload([DEVICE_ID_RSP1570, message_type, key])
+    return encode_payload([device_id, message_type, key])
 
 
-def encode_volume_direct_command(zone, volume):
+def encode_volume_direct_command(device_id, zone, volume):
     if zone == 1:
         message_type = MSGTYPE_VOLUME_DIRECT_COMMANDS
     elif zone == 2:
@@ -286,4 +285,4 @@ def encode_volume_direct_command(zone, volume):
     if volume < MIN_VOLUME or volume > MAX_VOLUME:
         raise ValueError("Volume out of range: {}".format(volume))
 
-    return encode_payload([DEVICE_ID_RSP1570, message_type, volume])
+    return encode_payload([device_id, message_type, volume])

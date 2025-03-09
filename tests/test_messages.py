@@ -1,18 +1,20 @@
-import aiounittest
 import logging
+
+import aiounittest
+
+from rsp1570serial import DEVICE_ID_RSP1570
 from rsp1570serial.commands import (
-    encode_command,
     MSGTYPE_PRIMARY_COMMANDS,
     MSGTYPE_VOLUME_DIRECT_COMMANDS,
+    encode_command,
 )
-from rsp1570serial.messages import decode_message_stream, FeedbackMessage
+from rsp1570serial.messages import FeedbackMessage, decode_message_stream
 from rsp1570serial.protocol import StreamProxy
-import unittest
 
 
 async def decode_all_messages(ser):
     messages = []
-    async for command in decode_message_stream(ser):
+    async for command in decode_message_stream(DEVICE_ID_RSP1570, ser):
         messages.append(command)
     return messages
 
@@ -25,7 +27,7 @@ async def decode_single_message(ser):
 
 class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
     async def test_encode_decode(self):
-        message = encode_command("POWER_TOGGLE")
+        message = encode_command(DEVICE_ID_RSP1570, "POWER_TOGGLE")
         with self.assertLogs(level=logging.INFO) as cm:
             command = await decode_single_message(StreamProxy(message))
         self.assertEqual(command.message_type, MSGTYPE_PRIMARY_COMMANDS)
@@ -39,7 +41,7 @@ class AsyncRotelTestMessages(aiounittest.AsyncTestCase):
         )
 
     async def test_encode_decode_with_meta(self):
-        message = encode_command("VOLUME_40")
+        message = encode_command(DEVICE_ID_RSP1570, "VOLUME_40")
         with self.assertLogs(level=logging.INFO) as cm:
             command = await decode_single_message(StreamProxy(message))
         self.assertEqual(command.message_type, MSGTYPE_VOLUME_DIRECT_COMMANDS)

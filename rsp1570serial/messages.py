@@ -1,10 +1,10 @@
 import logging
+
 from rsp1570serial.icons import flags_to_icons, icons_that_are_on
 from rsp1570serial.protocol import decode_protocol_stream
 
 _LOGGER = logging.getLogger(__name__)
 
-DEVICE_ID_RSP1570 = 0xA3
 
 MSGTYPE_PRIMARY_COMMANDS = 0x10
 MSGTYPE_MAIN_ZONE_COMMANDS = 0x14
@@ -188,11 +188,11 @@ def command_message_handler(message_type, data):
     return CommandMessage(message_type, data)
 
 
-def decode_message(payload):
-    if payload[0] != DEVICE_ID_RSP1570:
+def decode_message(device_id, payload):
+    if payload[0] != device_id:
         raise RotelMessageError(
             "Didn't get expected Device ID byte.  {} != {}".format(
-                payload[0], DEVICE_ID_RSP1570
+                payload[0], device_id
             )
         )
 
@@ -220,6 +220,6 @@ def decode_message(payload):
     return message_handler(message_type, data)
 
 
-async def decode_message_stream(ser):
+async def decode_message_stream(device_id, ser):
     async for payload in decode_protocol_stream(ser):
-        yield decode_message(payload)
+        yield decode_message(device_id, payload)

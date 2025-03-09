@@ -1,11 +1,18 @@
 import asyncio
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
+from weakref import WeakSet
+
+from serial import (  # type: ignore[import-untyped]
+    PARITY_NONE,
+    STOPBITS_ONE,
+    SerialException,
+)
+from serial_asyncio_fast import open_serial_connection  # type: ignore[import-untyped]
+
+from rsp1570serial import DEVICE_ID_RSP1570
 from rsp1570serial.commands import encode_command, encode_volume_direct_command
 from rsp1570serial.messages import decode_message_stream
-from serial import PARITY_NONE, STOPBITS_ONE, SerialException  # type: ignore[import-untyped]
-from serial_asyncio_fast import open_serial_connection  # type: ignore[import-untyped]
-from weakref import WeakSet
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,8 +28,9 @@ class RotelAmpConn:
     Use SharedRotelAmpConn in preference to using this directly
     """
 
-    def __init__(self, serial_port):
+    def __init__(self, serial_port, device_id=DEVICE_ID_RSP1570):
         self.serial_port = serial_port
+        self.device_id = device_id
         self.reader = None
         self.writer = None
 
@@ -52,16 +60,18 @@ class RotelAmpConn:
 
     async def send_command(self, command_name):
         if self.writer is not None:
-            self.writer.write(encode_command(command_name))
+            self.writer.write(encode_command(self.device_id, command_name))
             await self.writer.drain()
 
     async def send_volume_direct_command(self, zone, volume):
         if self.writer is not None:
-            self.writer.write(encode_volume_direct_command(zone, volume))
+            self.writer.write(
+                encode_volume_direct_command(self.device_id, zone, volume)
+            )
             await self.writer.drain()
 
     def read_messages(self):
-        return decode_message_stream(self.reader)
+        return decode_message_stream(self.device_id, self.reader)
 
 
 @asynccontextmanager

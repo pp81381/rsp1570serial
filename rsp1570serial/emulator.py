@@ -1,21 +1,21 @@
 import argparse
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from functools import wraps
-import logging
 from weakref import WeakSet
 
+from rsp1570serial import DEVICE_ID_RSP1570, DEVICE_ID_RSP1572
 from rsp1570serial.commands import MESSAGES
 from rsp1570serial.icons import icon_list_to_flags
 from rsp1570serial.messages import (
-    decode_message_stream,
-    CommandMessage,
-    DEVICE_ID_RSP1570,
     MSGTYPE_FEEDBACK_STRING,
     MSGTYPE_VOLUME_DIRECT_COMMANDS,
     MSGTYPE_ZONE_2_VOLUME_DIRECT_COMMANDS,
     MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS,
     MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS,
+    CommandMessage,
+    decode_message_stream,
 )
 from rsp1570serial.protocol import encode_payload
 
@@ -148,7 +148,7 @@ def only_if_on(f):
 
 
 class RotelRSP1570Emulator:
-    def __init__(self, aliases=None, is_on=False):
+    def __init__(self, aliases=None, is_on=False, device_id=DEVICE_ID_RSP1570):
         self._writer = None
         self._aliases = {} if aliases is None else aliases
         self._is_on = is_on
@@ -159,6 +159,7 @@ class RotelRSP1570Emulator:
         self._volume = INITIAL_VOLUME
         self._source = INITIAL_SOURCE
         self._observers = WeakSet()
+        self._device_id = device_id
 
     @only_if_on
     async def turn_off(self):
@@ -284,7 +285,7 @@ class RotelRSP1570Emulator:
         return "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
     def encode_feedback_message(self):
-        payload = bytearray([DEVICE_ID_RSP1570, MSGTYPE_FEEDBACK_STRING])
+        payload = bytearray([self._device_id, MSGTYPE_FEEDBACK_STRING])
         payload.extend(self.display_line_1.encode())
         payload.extend(self.info.encode())
         payload.extend(icon_list_to_flags(self.icon_list))
@@ -319,7 +320,7 @@ class CommandHandler:
         self._device = device
 
     async def handle_command_stream(self, reader):
-        async for message in decode_message_stream(reader):
+        async for message in decode_message_stream(self._device._device_id, reader):
             if isinstance(message, CommandMessage):
                 await self.handle_command(message)
             else:
@@ -430,11 +431,11 @@ async def create_device(*args, **kwargs):
         await device._blinker.stop()
 
 
-async def run_server(port, aliases, is_on):
+async def run_server(port, aliases, is_on, device_id):
     # pylint: disable=unused-variable
     heartbeat_task = asyncio.create_task(heartbeat())
 
-    async with create_device(aliases, is_on) as device:
+    async with create_device(aliases, is_on, device_id) as device:
         handle_messages = make_message_handler(device)
         async with await asyncio.start_server(handle_messages, port=port) as server:
             for s in server.sockets:
@@ -448,7 +449,19 @@ async def run_server(port, aliases, is_on):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
+    models = {
+        "rsp1570": DEVICE_ID_RSP1570,
+        "rsp1572": DEVICE_ID_RSP1572,
+    }
+
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-m",
+        "--model",
+        choices=list(models.keys()),
+        default="rsp1570",
+        help="model of device to emulate",
+    )
     parser.add_argument(
         "-p", "--port", type=int, default=50001, help="port to serve on"
     )
@@ -471,4 +484,6 @@ if __name__ == "__main__":
             aliases[name] = alias
             logging.info("Source '%s' aliased to '%s'", name, alias)
 
-    asyncio.run(run_server(args.port, aliases, args.is_on))
+    device_id = models[args.model]
+
+    asyncio.run(run_server(args.port, aliases, args.is_on, device_id))
