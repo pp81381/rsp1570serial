@@ -17,10 +17,6 @@ from rsp1570serial.messages import decode_message_stream
 _LOGGER = logging.getLogger(__name__)
 
 
-class RotelAmpConnConnectionError(Exception):
-    pass
-
-
 class RotelAmpConn:
     """
     Basic connection to a Rotel Amp
@@ -41,16 +37,13 @@ class RotelAmpConn:
     async def open(self):
         if self.writer is not None:
             raise RuntimeError("RotelAmpConn is already open")
-        try:
-            self.reader, self.writer = await open_serial_connection(
-                url=self.serial_port,
-                baudrate=115200,
-                timeout=None,
-                parity=PARITY_NONE,
-                stopbits=STOPBITS_ONE,
-            )
-        except SerialException as exc:
-            raise RotelAmpConnConnectionError(str(exc)) from exc
+        self.reader, self.writer = await open_serial_connection(
+            url=self.serial_port,
+            baudrate=115200,
+            timeout=None,
+            parity=PARITY_NONE,
+            stopbits=STOPBITS_ONE,
+        )
 
     def close(self):
         if self.writer is not None:

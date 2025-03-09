@@ -1,19 +1,20 @@
 import asyncio
-import aiounittest
 from contextlib import asynccontextmanager
+
+import aiounittest
+from serial import SerialException  # type: ignore[import-untyped]
+
 from rsp1570serial.connection import (
     SharedRotelAmpConn,
-    RotelAmpConnConnectionError,
-    create_shared_rotel_amp_conn,
     create_message_processor_client,
+    create_shared_rotel_amp_conn,
 )
 from rsp1570serial.emulator import (
-    make_message_handler,
-    create_device,
     INITIAL_SOURCE,
     INITIAL_VOLUME,
+    create_device,
+    make_message_handler,
 )
-from serial import SerialException  # type: ignore[import-untyped]
 
 TEST_PORT = 50050
 TEST_URL = f"socket://:{TEST_PORT}"
@@ -109,24 +110,3 @@ class AsyncTestConnection(aiounittest.AsyncTestCase):
                     await asyncio.sleep(0.2)
                     self.assertEqual(conn1.queue.qsize(), 3)
                     self.assertEqual(conn3.queue.qsize(), 3)
-
-    async def test_connection_failure1(self):
-        shared_conn = SharedRotelAmpConn(f"socket://:{BAD_TEST_PORT}")
-        # Connection refused by host
-        with self.assertRaises(RotelAmpConnConnectionError) as cm:
-            await shared_conn.open()
-        self.assertIsInstance(cm.exception.__cause__, SerialException)
-
-    async def test_connection_failure2(self):
-        shared_conn = SharedRotelAmpConn(f"socket://192.168.51.1:{TEST_PORT}")
-        # Timed out due to made up IP address
-        with self.assertRaises(RotelAmpConnConnectionError) as cm:
-            await shared_conn.open()
-        self.assertIsInstance(cm.exception.__cause__, SerialException)
-
-    async def test_connection_failure3(self):
-        shared_conn = SharedRotelAmpConn(f"socket://made_up_hostname:{TEST_PORT}")
-        # getaddrinfo failed
-        with self.assertRaises(RotelAmpConnConnectionError) as cm:
-            await shared_conn.open()
-        self.assertIsInstance(cm.exception.__cause__, SerialException)
