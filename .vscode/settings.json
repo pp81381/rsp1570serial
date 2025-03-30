@@ -1,0 +1,17 @@
+{
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": false,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.testing.unittestEnabled": true,
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "tests",
+        "-p",
+        "*test*.py"
+    ],
+    "git.followTagsWhenSync": true,
+    "terminal.integrated.env.linux": {
+        "PYTHONPATH": "."
+    },
+}
