@@ -1,31 +1,29 @@
 import asyncio
 import logging
 
-from example_runner import run_and_log_task
-from rsp1570serial import DEVICE_ID_RSP1570
+from example_runner import process_command_args
 from rsp1570serial.connection import create_rotel_amp_conn
-from rsp1570serial.utils import get_platform_serial_port
+from rsp1570serial.process_command import process_command
+from rsp1570serial.rotel_model_meta import ROTEL_MODELS
 
 
-async def run_command_n_times(conn, command_name, interval, n):
-    for x in range(n):
-        await asyncio.sleep(interval)
-        logging.info("Writing {} command number {}".format(command_name, x + 1))
-        await conn.send_command(command_name)
-    logging.info("All instances of {} sent".format(command_name))
-
-
-async def main(serial_port=None, heartbeat=True, log_payload=False):
-    if serial_port is None:
-        serial_port = get_platform_serial_port()
-    async with create_rotel_amp_conn(serial_port, DEVICE_ID_RSP1570) as conn:
-        main_task = asyncio.create_task(
-            run_command_n_times(conn, "MUTE_TOGGLE", 3.0, 4)
+async def main():
+    args = process_command_args()
+    async with create_rotel_amp_conn(
+        args.serial_port, ROTEL_MODELS[args.model]
+    ) as conn:
+        logging.info("Sending POWER_TOGGLE")
+        messages = await process_command(conn, "POWER_TOGGLE")
+        logging.info(
+            "Finished sending POWER_TOGGLE: %d message(s) collected", len(messages)
         )
-        await run_and_log_task(main_task, conn, heartbeat, log_payload)
+        for m in messages:
+            m.log()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s:%(message)s",
+    )
     asyncio.run(main())
-    # asyncio.run(main("socket://192.168.50.211:50002"))

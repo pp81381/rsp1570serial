@@ -1,12 +1,12 @@
 import argparse
 import asyncio
 import logging
+from asyncio import StreamReader, StreamWriter
 from contextlib import asynccontextmanager
 from functools import wraps
+from typing import Dict, List, Optional, Union
 from weakref import WeakSet
 
-from rsp1570serial import DEVICE_ID_RSP1570, DEVICE_ID_RSP1572
-from rsp1570serial.commands import MESSAGES
 from rsp1570serial.icons import icon_list_to_flags
 from rsp1570serial.messages import (
     MSGTYPE_FEEDBACK_STRING,
@@ -15,9 +15,11 @@ from rsp1570serial.messages import (
     MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS,
     MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS,
     CommandMessage,
-    decode_message_stream,
 )
 from rsp1570serial.protocol import encode_payload
+from rsp1570serial.rotel_model_meta import ROTEL_MODELS, RotelModelMeta
+
+EMULATOR_DEFAULT_PORT = 50001
 
 MIN_VOLUME = 0
 MAX_VOLUME = 96
@@ -43,6 +45,7 @@ class SourceAttribs:
 
 
 # A set of realistic looking attributes to apply when each source is selected
+# TODO: Verify for RSP-1572
 SOURCE_ATTRIB_MAP = {
     " CD": SourceAttribs(
         "STEREO          44.1K",
@@ -104,6 +107,18 @@ SOURCE_ATTRIB_MAP = {
         ["--video_5", "--alias_video_5"],
         "alias_video_5",
     ),
+    "VIDEO 6": SourceAttribs(
+        "PCM 2CH         48K  ",
+        ["A", "Standby LED", "SW", "FR", "FL"],
+        ["--video_6", "--alias_video_6"],
+        "alias_video_6",
+    ),
+    "iPod/USB": SourceAttribs(
+        "PCM 2CH         48K  ",
+        ["A", "Standby LED", "SW", "FR", "FL"],
+        ["--ipod", "--alias_ipod", "--usb", "--alias_usb"],
+        "alias_ipod",
+    ),
     "MULTI": SourceAttribs(
         "BYPASS          48K  ",
         ["Standby LED", "CBL", "CBR", "SW", "SR", "SL", "FR", "C", "FL"],
@@ -148,26 +163,31 @@ def only_if_on(f):
 
 
 class RotelRSP1570Emulator:
-    def __init__(self, aliases=None, is_on=False, device_id=DEVICE_ID_RSP1570):
-        self._writer = None
+    def __init__(
+        self,
+        meta: RotelModelMeta,
+        aliases: Optional[Dict[str, str]] = None,
+        is_on: bool = False,
+    ):
+        self._codec = meta.codec
         self._aliases = {} if aliases is None else aliases
         self._is_on = is_on
+        self._writer = None
         self._is_muted = False
         self._mute_blink_count = 0
         self._blinker = Blinker(self.mute_blink)
         self._is_party_mode = False
         self._volume = INITIAL_VOLUME
         self._source = INITIAL_SOURCE
-        self._observers = WeakSet()
-        self._device_id = device_id
+        self._observers: WeakSet[StreamWriter] = WeakSet()
 
     @only_if_on
-    async def turn_off(self):
+    async def turn_off(self) -> None:
         self._is_on = False
         await self._blinker.stop()
         await self.write_feedback_message()
 
-    async def turn_on(self):
+    async def turn_on(self) -> None:
         if self._is_on:
             if self._is_muted:
                 await self._mute_off_no_feedback()
@@ -179,14 +199,14 @@ class RotelRSP1570Emulator:
             await self._mute_off_no_feedback()
             await self.write_feedback_message()
 
-    async def toggle(self):
+    async def toggle(self) -> None:
         if self._is_on:
             await self.turn_off()
         else:
             await self.turn_on()
 
     @only_if_on
-    async def set_volume(self, level):
+    async def set_volume(self, level: int) -> None:
         if self._is_muted:
             await self._mute_off_no_feedback()
         if level < MIN_VOLUME or level > MAX_VOLUME:
@@ -195,24 +215,24 @@ class RotelRSP1570Emulator:
         await self.write_feedback_message()
 
     @only_if_on
-    async def volume_up(self):
+    async def volume_up(self) -> None:
         await self.set_volume(self._volume + 1)
 
     @only_if_on
-    async def volume_down(self):
+    async def volume_down(self) -> None:
         await self.set_volume(self._volume - 1)
 
     @only_if_on
-    async def set_party_mode(self, flag):
+    async def set_party_mode(self, flag: bool) -> None:
         self._is_party_mode = flag
         await self.write_feedback_message()
 
-    async def mute_blink(self):
+    async def mute_blink(self) -> None:
         self._mute_blink_count += 1
         await self.write_feedback_message()
 
     @only_if_on
-    async def mute_on(self):
+    async def mute_on(self) -> None:
         if self._is_muted:
             return
         self._is_muted = True
@@ -221,48 +241,48 @@ class RotelRSP1570Emulator:
         self._blinker.start()
 
     @only_if_on
-    async def mute_off(self):
+    async def mute_off(self) -> None:
         if not self._is_muted:
             return
         await self._mute_off_no_feedback()
         await self.write_feedback_message()
 
-    async def _mute_off_no_feedback(self):
+    async def _mute_off_no_feedback(self) -> None:
         self._is_muted = False
         await self._blinker.stop()
 
     @only_if_on
-    async def mute_toggle(self):
+    async def mute_toggle(self) -> None:
         if self._is_muted:
             await self.mute_off()
         else:
             await self.mute_on()
 
     @only_if_on
-    async def set_source(self, source):
+    async def set_source(self, source: str) -> None:
         if source not in SOURCE_ATTRIB_MAP:
             return
         self._source = source
         await self.write_feedback_message()
 
     @only_if_on
-    async def display_refresh(self):
+    async def display_refresh(self) -> None:
         await self.write_feedback_message()
 
     @property
-    def info(self):
+    def info(self) -> str:
         if self._is_on:
             return SOURCE_ATTRIB_MAP[self._source].info
         return "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
     @property
-    def icon_list(self):
+    def icon_list(self) -> List[str]:
         if self._is_on:
             return SOURCE_ATTRIB_MAP[self._source].icon_list
         return ["Standby LED"]
 
     @property
-    def formatted_volume(self):
+    def formatted_volume(self) -> str:
         """
         Returns formatted volume.
         Doesn't check whether the amplifier is off.
@@ -275,7 +295,7 @@ class RotelRSP1570Emulator:
         return "VOL  {:02d}".format(self._volume)
 
     @property
-    def display_line_1(self):
+    def display_line_1(self) -> str:
         if self._is_on:
             return "{:8.8s}  {:3.3s} {:7.7s}".format(
                 self._aliases.get(self._source, self._source),
@@ -284,22 +304,22 @@ class RotelRSP1570Emulator:
             )
         return "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
-    def encode_feedback_message(self):
-        payload = bytearray([self._device_id, MSGTYPE_FEEDBACK_STRING])
+    def encode_feedback_message(self) -> bytes:
+        payload = bytearray([self._codec.device_id, MSGTYPE_FEEDBACK_STRING])
         payload.extend(self.display_line_1.encode())
         payload.extend(self.info.encode())
         payload.extend(icon_list_to_flags(self.icon_list))
         return encode_payload(payload)
 
-    def add_observer(self, writer):
+    def add_observer(self, writer: StreamWriter) -> None:
         self._observers.add(writer)
         logging.info("New observer")
 
-    def remove_observer(self, writer):
+    def remove_observer(self, writer: StreamWriter) -> None:
         self._observers.remove(writer)
         logging.info("Removed observer")
 
-    async def write_feedback_message(self):
+    async def write_feedback_message(self) -> None:
         msg = self.encode_feedback_message()
         for writer in self._observers:
             writer.write(msg)
@@ -307,20 +327,13 @@ class RotelRSP1570Emulator:
         logging.info("Feedback message written: %r", msg)
 
 
-def index_command_messages():
-    command_code_lookup = {}
-    for code, value in MESSAGES.items():
-        command_code_lookup[bytes(value)] = code
-    return command_code_lookup
-
-
 class CommandHandler:
-    def __init__(self, device):
-        self._command_code_lookup = index_command_messages()
+    def __init__(self, device: RotelRSP1570Emulator):
+        self._command_code_lookup = device._codec.index_command_messages()
         self._device = device
 
     async def handle_command_stream(self, reader):
-        async for message in decode_message_stream(self._device._device_id, reader):
+        async for message in self._device._codec.decode_message_stream(reader):
             if isinstance(message, CommandMessage):
                 await self.handle_command(message)
             else:
@@ -387,6 +400,10 @@ class CommandHandler:
             await self._device.set_source("VIDEO 4")
         elif command_code == "SOURCE_VIDEO_5":
             await self._device.set_source("VIDEO 5")
+        elif command_code == "SOURCE_VIDEO_6":
+            await self._device.set_source("VIDEO 6")
+        elif command_code == "SOURCE_IPOD_USB":
+            await self._device.set_source("iPod/USB")
         elif command_code == "SOURCE_MULTI_INPUT":
             await self._device.set_source("MULTI")
         elif command_code == "DISPLAY_REFRESH":
@@ -395,47 +412,38 @@ class CommandHandler:
             logging.info("Unsupported command code '%s' ignored", command_code)
 
 
-async def heartbeat():
-    """
-    Tells you that the loop is still running
-    Also keeps the KeyboardInterrupt running on Windows until
-    Python 3.8 comes along (https://bugs.python.org/issue23057)
-    """
-    try:
-        count = 0
-        while True:
-            await asyncio.sleep(2)
-            count += 1
-            logging.info("Heartbeat number {}".format(count))
-    except asyncio.CancelledError:
-        logging.info("Heartbeat cancelled")
-
-
 def make_message_handler(device: RotelRSP1570Emulator):
-    async def handle_messages(reader, writer):
+    async def handle_messages(reader: StreamReader, writer: StreamWriter):
         device.add_observer(writer)
         command_handler = CommandHandler(device)
         await command_handler.handle_command_stream(reader)
         device.remove_observer(writer)
         writer.close()
+        await writer.wait_closed()
 
     return handle_messages
 
 
 @asynccontextmanager
-async def create_device(*args, **kwargs):
-    device = RotelRSP1570Emulator(*args, **kwargs)
+async def create_device(
+    meta: RotelModelMeta,
+    aliases: Optional[Dict[str, str]] = None,
+    is_on: bool = False,
+):
+    device = RotelRSP1570Emulator(meta, aliases, is_on)
     try:
         yield device
     finally:
         await device._blinker.stop()
 
 
-async def run_server(port, aliases, is_on, device_id):
-    # pylint: disable=unused-variable
-    heartbeat_task = asyncio.create_task(heartbeat())
-
-    async with create_device(aliases, is_on, device_id) as device:
+async def run_server(
+    port: Union[int, str],
+    meta: RotelModelMeta,
+    aliases,
+    is_on: bool,
+) -> None:
+    async with create_device(meta, aliases, is_on) as device:
         handle_messages = make_message_handler(device)
         async with await asyncio.start_server(handle_messages, port=port) as server:
             for s in server.sockets:
@@ -449,21 +457,20 @@ async def run_server(port, aliases, is_on, device_id):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    models = {
-        "rsp1570": DEVICE_ID_RSP1570,
-        "rsp1572": DEVICE_ID_RSP1572,
-    }
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-m",
         "--model",
-        choices=list(models.keys()),
+        choices=list(ROTEL_MODELS.keys()),
         default="rsp1570",
         help="model of device to emulate",
     )
     parser.add_argument(
-        "-p", "--port", type=int, default=50001, help="port to serve on"
+        "-p",
+        "--port",
+        type=int,
+        default=EMULATOR_DEFAULT_PORT,
+        help="port to serve on",
     )
     parser.add_argument(
         "-o", "--is_on", action="store_true", help="emulator starts up in the on state"
@@ -484,6 +491,6 @@ if __name__ == "__main__":
             aliases[name] = alias
             logging.info("Source '%s' aliased to '%s'", name, alias)
 
-    device_id = models[args.model]
+    meta = ROTEL_MODELS[args.model]
 
-    asyncio.run(run_server(args.port, aliases, args.is_on, device_id))
+    asyncio.run(run_server(args.port, meta, aliases, args.is_on))

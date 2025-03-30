@@ -1,112 +1,34 @@
 import asyncio
-from contextlib import asynccontextmanager
+from unittest import IsolatedAsyncioTestCase
 
-import aiounittest
-from serial import SerialException  # type: ignore[import-untyped]
-
-from rsp1570serial.connection import (
-    SharedRotelAmpConn,
-    create_message_processor_client,
-    create_shared_rotel_amp_conn,
-)
-from rsp1570serial.emulator import (
-    INITIAL_SOURCE,
-    INITIAL_VOLUME,
-    create_device,
-    make_message_handler,
-)
-
-TEST_PORT = 50050
-TEST_URL = f"socket://:{TEST_PORT}"
-BAD_TEST_PORT = TEST_PORT + 1
+from rsp1570serial.emulator import INITIAL_SOURCE, INITIAL_VOLUME
+from rsp1570serial.rotel_model_meta import RSP1570_META
+from tests.emulator_test_helper import EmulatorTestHelper
 
 
-@asynccontextmanager
-async def start_emulator(device, port=TEST_PORT):
-    handle_messages = make_message_handler(device)
-    async with await asyncio.start_server(handle_messages, port=port) as server:
-        yield server
-    await asyncio.sleep(0)
+class AsyncTestConnection(IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.helper = EmulatorTestHelper(RSP1570_META, is_on=True)
+        await self.helper.asyncSetUp()
 
-
-class AsyncTestConnection(aiounittest.AsyncTestCase):
-    async def test_process_command1(self):
-        import logging
-
-        logging.basicConfig(level=logging.DEBUG)
-        async with create_device(is_on=False) as device:
-            async with start_emulator(device):
-                self.assertEqual(device._is_on, False)
-                async with create_message_processor_client(TEST_URL) as conn:
-                    messages = await conn.process_command(
-                        "POWER_ON", conn.POWER_ON_TIME_WINDOW
-                    )
-                    self.assertEqual(len(messages), 1)
-                self.assertEqual(device._is_on, True)
-
-    async def test_process_command2(self):
-        async with create_device(is_on=True) as device:
-            async with start_emulator(device):
-                self.assertEqual(device._is_muted, False)
-                async with create_message_processor_client(TEST_URL) as conn:
-                    await conn.process_command("MUTE_TOGGLE")
-                self.assertEqual(device._is_muted, True)
-
-    async def test_process_command3(self):
-        aliases = {
-            " CD": "CD ALIAS",
-        }
-        async with create_device(is_on=True, aliases=aliases) as device:
-            async with start_emulator(device):
-                self.assertEqual(device._source, INITIAL_SOURCE)
-                async with create_message_processor_client(TEST_URL) as conn:
-                    messages = await conn.process_command("SOURCE_CD")
-                self.assertEqual(device._source, " CD")
-                self.assertEqual(len(messages), 1)
-                self.assertEqual(messages[0].lines[0], "CD ALIAS      VOL  50")
+    async def asyncTearDown(self):
+        await self.helper.asyncTearDown()
 
     async def test_send_command1(self):
-        async with create_device(is_on=True) as device:
-            async with start_emulator(device):
-                self.assertEqual(device._is_muted, False)
-                async with create_message_processor_client(TEST_URL) as conn:
-                    await conn.send_command("MUTE_TOGGLE")
-                self.assertEqual(device._is_muted, True)
+        assert self.helper.device is not None
+        self.assertEqual(self.helper.device._is_muted, False)
+        async with self.helper.create_conn() as conn:
+            await conn.send_command("MUTE_TOGGLE")
+        self.assertEqual(self.helper.device._is_muted, True)
 
     async def test_send_command2(self):
-        async with create_device(is_on=True) as device:
-            async with start_emulator(device):
-                self.assertEqual(device._source, INITIAL_SOURCE)
-                async with create_message_processor_client(TEST_URL) as conn:
-                    await conn.send_command("SOURCE_TUNER")
-                self.assertEqual(device._source, "TUNER")
+        self.assertEqual(self.helper.device._source, INITIAL_SOURCE)
+        async with self.helper.create_conn() as conn:
+            await conn.send_command("SOURCE_TUNER")
+        self.assertEqual(self.helper.device._source, "TUNER")
 
     async def test_send_volume_direct_command1(self):
-        async with create_device(is_on=True) as device:
-            async with start_emulator(device):
-                self.assertEqual(device._volume, INITIAL_VOLUME)
-                async with create_message_processor_client(TEST_URL) as conn:
-                    await conn.send_volume_direct_command(1, 55)
-                self.assertEqual(device._volume, 55)
-
-    async def test_multi_clients1(self):
-        async with create_device(is_on=True) as device:
-            async with start_emulator(device):
-                async with create_shared_rotel_amp_conn(TEST_URL) as shared_conn:
-                    conn1 = shared_conn.new_client_conn()
-                    conn2 = shared_conn.new_client_conn()
-                    conn3 = shared_conn.new_client_conn()
-                    await conn1.send_command("SOURCE_TUNER")
-                    await conn1.send_command("SOURCE_CD")
-                    await asyncio.sleep(0.2)
-                    self.assertEqual(conn1.queue.qsize(), 2)
-                    self.assertEqual(conn2.queue.qsize(), 2)
-                    self.assertEqual(conn3.queue.qsize(), 2)
-                    assert shared_conn._clients is not None
-                    self.assertEqual(len(shared_conn._clients), 3)
-                    conn2 = None
-                    self.assertEqual(len(shared_conn._clients), 2)
-                    await conn1.send_command("SOURCE_VIDEO_1")
-                    await asyncio.sleep(0.2)
-                    self.assertEqual(conn1.queue.qsize(), 3)
-                    self.assertEqual(conn3.queue.qsize(), 3)
+        self.assertEqual(self.helper.device._volume, INITIAL_VOLUME)
+        async with self.helper.create_conn() as conn:
+            await conn.send_volume_direct_command(1, 55)
+        self.assertEqual(self.helper.device._volume, 55)

@@ -1,4 +1,5 @@
-import unittest
+from unittest import TestCase
+
 from rsp1570serial.icons import (
     flags_to_icons,
     icon_dict_to_flags,
@@ -7,7 +8,7 @@ from rsp1570serial.icons import (
 )
 
 
-class TestIcons(unittest.TestCase):
+class TestIcons(TestCase):
     def test1(self):
         flags = b"\x00F\x08\x00\xfc"
         icon_dict = flags_to_icons(flags)

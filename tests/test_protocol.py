@@ -1,14 +1,14 @@
-import aiounittest
+from unittest import IsolatedAsyncioTestCase, TestCase
+
 from rsp1570serial.protocol import (
-    calculate_checksum,
-    encode_payload,
     ProtocolDecoder,
     StreamProxy,
+    calculate_checksum,
+    encode_payload,
 )
-import unittest
 
 
-class RotelTestProtocol(unittest.TestCase):
+class RotelTestProtocol(TestCase):
     def test_checksum1(self):
         self.assertEqual(calculate_checksum([0x03, 0xA3, 0x10, 0x1E]), 0xD4)
 
@@ -35,10 +35,9 @@ class RotelTestProtocol(unittest.TestCase):
         )
 
 
-class AsyncRotelTestProtocol(aiounittest.AsyncTestCase):
+class AsyncRotelTestProtocol(IsolatedAsyncioTestCase):
     async def test_encode_decode_with_meta(self):
         message = encode_payload(b"\xa3\x30\x28")
         decoder = ProtocolDecoder(StreamProxy(message))
         data = await decoder.read_payload()
         self.assertEqual(data, b"\xa3\x30\x28")
-

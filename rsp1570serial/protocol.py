@@ -13,6 +13,7 @@ The payload is of the form "device id", "message type", "data"
 
 import io
 import logging
+from typing import AsyncGenerator, Protocol
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,6 +44,10 @@ class RotelUnexpectedStartByteError(RotelInvalidByteError):
     pass
 
 
+class AnyAsyncReader(Protocol):
+    async def read(self, n: int) -> bytes: ...
+
+
 class StreamProxy:
     """
     Wraps an io.BytesIO object and presents an interface compatible with the Decoder.
@@ -57,7 +62,7 @@ class StreamProxy:
 
 
 class ProtocolDecoder:
-    def __init__(self, ser):
+    def __init__(self, ser: AnyAsyncReader):
         self.ser = ser
         self.bytes_received = 0
 
@@ -155,8 +160,8 @@ class ProtocolDecoder:
         return content[1:-1]
 
 
-async def decode_protocol_stream(ser):
-    _LOGGER.info("Started decoding protocol stream")
+async def decode_protocol_stream(ser: AnyAsyncReader) -> AsyncGenerator[bytes, None]:
+    _LOGGER.debug("Started decoding protocol stream")
     decoder = ProtocolDecoder(ser)
     while True:
         try:
@@ -167,7 +172,7 @@ async def decode_protocol_stream(ser):
             break
         else:
             yield payload
-    _LOGGER.info("Finished decoding protocol stream")
+    _LOGGER.debug("Finished decoding protocol stream")
 
 
 def encode_payload(payload):

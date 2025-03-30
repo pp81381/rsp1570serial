@@ -1,12 +1,20 @@
 import logging
+from dataclasses import dataclass
+from typing import AsyncGenerator, Callable, Dict, List, Union
 
 from rsp1570serial.icons import flags_to_icons, icons_that_are_on
-from rsp1570serial.protocol import decode_protocol_stream
+from rsp1570serial.protocol import (
+    AnyAsyncReader,
+    decode_protocol_stream,
+    encode_payload,
+)
+from rsp1570serial.utils import pretty_print_bytes
 
 _LOGGER = logging.getLogger(__name__)
 
 
 MSGTYPE_PRIMARY_COMMANDS = 0x10
+MSGTYPE_PRIMARY_KEY_RELEASED_COMMANDS = 0x11  # RSP1572
 MSGTYPE_MAIN_ZONE_COMMANDS = 0x14
 MSGTYPE_RECORD_SOURCE_COMMANDS = 0x15
 MSGTYPE_ZONE_2_COMMANDS = 0x16
@@ -14,11 +22,27 @@ MSGTYPE_ZONE_3_COMMANDS = 0x17
 MSGTYPE_ZONE_4_COMMANDS = 0x18
 MSGTYPE_FEEDBACK_STRING = 0x20
 MSGTYPE_TRIGGER_STATUS_STRING = 0x21
+MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_1 = 0x22  # RSP1572
+MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_2 = 0x23  # RSP1572
 MSGTYPE_VOLUME_DIRECT_COMMANDS = 0x30
 MSGTYPE_ZONE_2_VOLUME_DIRECT_COMMANDS = 0x32
 MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS = 0x33
 MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS = 0x34
 MSGTYPE_TRIGGER_DIRECT_COMMANDS = 0x40
+
+INVERT_F_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER F}".encode("utf-8")
+INVERT_M_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER M}".encode("utf-8")
+INVERT_T_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER T}".encode("utf-8")
+INVERT_R_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER R}".encode("utf-8")
+INVERT_S_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER S}".encode("utf-8")
+INVERT_A_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER A}".encode("utf-8")
+FULL_BAR_BYTES = "\N{BOX DRAWINGS LIGHT HORIZONTAL}".encode("utf-8")
+RIGHT_BYTES = "\N{BLACK MEDIUM RIGHT-POINTING TRIANGLE}".encode("utf-8")
+PAUSE_BYTES = "\N{DOUBLE VERTICAL BAR}".encode("utf-8")
+STOP_BYTES = "\N{BLACK SQUARE FOR STOP}".encode("utf-8")
+LEFT_BYTES = "\N{BLACK MEDIUM LEFT-POINTING TRIANGLE}".encode("utf-8")
+CURSOR_RIGHT_BYTES = "\N{RIGHTWARDS DOUBLE ARROW}".encode("utf-8")
+CURSOR_LEFT_BYTES = "\N{LEFTWARDS DOUBLE ARROW}".encode("utf-8")
 
 
 class RotelMessageError(Exception):
@@ -159,12 +183,38 @@ class TriggerMessage:
 
 
 class CommandMessage:
-    def __init__(self, message_type, key):
+    def __init__(self, message_type: int, key: bytes):
         self.message_type = message_type
         self.key = key
 
+    def log(self, level=logging.INFO):
+        pretty_key = pretty_print_bytes(self.key)
+        _LOGGER.log(
+            level,
+            f"Command Message: message_type={self.message_type}, key={pretty_key}",
+        )
 
-def feedback_message_handler(message_type, data):
+
+class SmartDisplayMessage:
+    def __init__(self, lines, start):
+        self.lines = lines
+        self.start = start
+
+    def log(self, level=logging.INFO):
+        for lineno, line in enumerate(self.lines, self.start):
+            _LOGGER.log(level, f"Display line {lineno}: '{line}'")
+
+
+# Type alias for all message types
+AnyMessage = Union[
+    FeedbackMessage,
+    CommandMessage,
+    TriggerMessage,
+    SmartDisplayMessage,
+]
+
+
+def feedback_message_handler(message_type: int, data: bytes) -> FeedbackMessage:
     assert message_type == MSGTYPE_FEEDBACK_STRING
     display_line1_bytes = data[0:21]  # The II is char 0x19
     display_line2_bytes = data[21:42]
@@ -178,28 +228,94 @@ def feedback_message_handler(message_type, data):
 
 # OFF Data was: bytearray(b'\x00\x00\x00\x00\x00')
 # ON  Data was: bytearray(b'\x01\x01\x00\x00\x00')
-def trigger_message_handler(message_type, data):
+def trigger_message_handler(message_type: int, data: bytes) -> TriggerMessage:
     assert message_type == MSGTYPE_TRIGGER_STATUS_STRING
     assert len(data) == 5
     return TriggerMessage(data)
 
 
-def command_message_handler(message_type, data):
+def command_message_handler(message_type: int, data: bytes) -> CommandMessage:
     return CommandMessage(message_type, data)
 
 
-def decode_message(device_id, payload):
-    if payload[0] != device_id:
-        raise RotelMessageError(
-            "Didn't get expected Device ID byte.  {} != {}".format(
-                payload[0], device_id
-            )
-        )
+def decode_smart_display_line(line_bytes: bytes) -> str:
+    """
+    Decode a smart display line
 
-    message_handlers = {
+    Convert special characters to appropriate unicode equivalents
+    Note - this should really be a codec but it works OK
+    """
+    line_bytes = (
+        line_bytes.replace(b"\x80", INVERT_F_BYTES)
+        .replace(b"\x81", INVERT_M_BYTES)
+        .replace(b"\x82", INVERT_T_BYTES)
+        .replace(b"\x83", INVERT_R_BYTES)
+        .replace(b"\x84", INVERT_S_BYTES)
+        .replace(b"\x85", INVERT_A_BYTES)
+        .replace(b"\x86", FULL_BAR_BYTES)
+        .replace(b"\x87", RIGHT_BYTES)
+        .replace(b"\x88", PAUSE_BYTES)
+        .replace(b"\x89", STOP_BYTES)
+        .replace(b"\x8a", LEFT_BYTES)
+        .replace(b"\x8b", CURSOR_RIGHT_BYTES)
+        .replace(b"\x8c", CURSOR_LEFT_BYTES)
+    )
+    line = line_bytes.decode(encoding="utf-8")
+    return line.rstrip()
+
+
+def smart_display_string_1_handler(
+    message_type: int,
+    data: bytes,
+) -> SmartDisplayMessage:
+    assert message_type == MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_1
+    assert len(data) == 28
+    assert data[0:2] == b"\x00\x00"
+    lines = [
+        decode_smart_display_line(data[2:28]),
+    ]
+    return SmartDisplayMessage(lines, 1)
+
+
+def smart_display_string_2_handler(
+    message_type: int,
+    data: bytes,
+) -> SmartDisplayMessage:
+    assert message_type == MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_2
+    assert len(data) == 234
+    lines = [
+        decode_smart_display_line(data[0:26]),
+        decode_smart_display_line(data[26:52]),
+        decode_smart_display_line(data[52:78]),
+        decode_smart_display_line(data[78:104]),
+        decode_smart_display_line(data[104:130]),
+        decode_smart_display_line(data[130:156]),
+        decode_smart_display_line(data[156:182]),
+        decode_smart_display_line(data[182:208]),
+        decode_smart_display_line(data[208:234]),
+    ]
+    return SmartDisplayMessage(lines, 2)
+
+
+def get_volume_direct_message_type(zone: int) -> int:
+    if zone == 1:
+        return MSGTYPE_VOLUME_DIRECT_COMMANDS
+    elif zone == 2:
+        return MSGTYPE_ZONE_2_VOLUME_DIRECT_COMMANDS
+    elif zone == 3:
+        return MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS
+    elif zone == 4:
+        return MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS
+    else:
+        raise ValueError("Invalid zone: {}".format(zone))
+
+
+def get_message_handler(message_type: int) -> Callable[[int, bytes], AnyMessage]:
+    message_handlers: Dict[int, Callable[[int, bytes], AnyMessage]] = {
         MSGTYPE_FEEDBACK_STRING: feedback_message_handler,
         MSGTYPE_TRIGGER_STATUS_STRING: trigger_message_handler,
         MSGTYPE_PRIMARY_COMMANDS: command_message_handler,
+        MSGTYPE_PRIMARY_KEY_RELEASED_COMMANDS: command_message_handler,
         MSGTYPE_MAIN_ZONE_COMMANDS: command_message_handler,
         MSGTYPE_RECORD_SOURCE_COMMANDS: command_message_handler,
         MSGTYPE_ZONE_2_COMMANDS: command_message_handler,
@@ -210,16 +326,55 @@ def decode_message(device_id, payload):
         MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS: command_message_handler,
         MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS: command_message_handler,
         MSGTYPE_TRIGGER_DIRECT_COMMANDS: command_message_handler,
+        MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_1: smart_display_string_1_handler,
+        MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_2: smart_display_string_2_handler,
     }
-    message_type = payload[1]
-    message_handler = message_handlers.get(message_type, None)
-    if message_handler is None:
+    if message_type in message_handlers:
+        return message_handlers[message_type]
+    else:
         raise RotelMessageError("Unknown message type byte {:X}".format(message_type))
 
-    data = payload[2:]
-    return message_handler(message_type, data)
 
+@dataclass
+class MessageCodec:
+    device_id: int
+    messages: Dict[str, List[int]]
+    min_volume: int
+    max_volume: int
 
-async def decode_message_stream(device_id, ser):
-    async for payload in decode_protocol_stream(ser):
-        yield decode_message(device_id, payload)
+    def encode_command(self, command_name: str) -> bytes:
+        [message_type, key] = self.messages[command_name]
+        return encode_payload([self.device_id, message_type, key])
+
+    def encode_volume_direct_command(self, zone: int, volume: int) -> bytes:
+        message_type = get_volume_direct_message_type(zone)
+
+        if volume < self.min_volume or volume > self.max_volume:
+            raise ValueError("Volume out of range: {}".format(volume))
+
+        return encode_payload([self.device_id, message_type, volume])
+
+    def decode_message(self, payload: bytes) -> AnyMessage:
+        if payload[0] != self.device_id:
+            raise RotelMessageError(
+                "Didn't get expected Device ID byte.  {} != {}".format(
+                    payload[0], self.device_id
+                )
+            )
+
+        message_type = payload[1]
+        data = payload[2:]
+        message_handler = get_message_handler(message_type)
+        return message_handler(message_type, data)
+
+    async def decode_message_stream(
+        self, ser: AnyAsyncReader
+    ) -> AsyncGenerator[AnyMessage, None]:
+        async for payload in decode_protocol_stream(ser):
+            yield self.decode_message(payload)
+
+    def index_command_messages(self) -> Dict[bytes, str]:
+        command_code_lookup = {}
+        for code, value in self.messages.items():
+            command_code_lookup[bytes(value)] = code
+        return command_code_lookup

@@ -16,11 +16,10 @@ setuptools.setup(
     url="https://github.com/pp81381/rsp1570serial",
     packages=setuptools.find_packages(),
     classifiers=[
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Topic :: Terminals :: Serial",
@@ -28,10 +27,9 @@ setuptools.setup(
         "Framework :: AsyncIO",
         "Development Status :: 4 - Beta",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.9",
     install_requires=[
         "pyserial>=3.4",
         "pyserial-asyncio-fast>=0.11",
-        "aiounittest>=1.1.0",
     ],
 )

@@ -1,55 +1,68 @@
 # rsp1570serial
 
-An asyncio based package to talk to a Rotel RSP-1570 processor using the RS-232 protocol
+An asyncio based package to talk to a Rotel RSP-1570 or RSP-1572 processor using the RS-232 protocol
 
-See [this document](http://www.rotel.com/sites/default/files/product/rs232/RSP1570%20Protocol.pdf) for the protocol definition
+The respective protocol defintions are documented here:
 
-Known to work with a GANA USB to RS-232 DB9 cable on Windows 10 and on Raspbian Stretch
+| Model                                                                                      |
+----------------------------------------------------------------------------------------------
+| [RSP-1570](https://www.rotel.com/sites/default/files/product/rs232/RSP1570%20Protocol.pdf) |
+| [RSP-1572](https://www.rotel.com/sites/default/files/product/rs232/RSP1572%20Protocol.pdf) |
 
-The protocol is similar to that used by other older Rotel kit.   For example, it looks as though the RSP-1572 used a protocol like this.  It has a different device id and supports a few more messages but this package could probably be updated to support it.
+This package known to work with a GANA USB to RS-232 DB9 cable on Windows 10 and on Raspbian Stretch and Buster
 
 This library was built to support a rotel_rsp1570 media player platform entity for [Home Assistant](https://www.home-assistant.io/) that can be found [here](https://github.com/pp81381/hassdev).
 
 # Usage
 
-## Create a connnection
+## Creating a connection
 
-The connection objects encapsulate most of the functionality of the library.
-
-It is recommended that the [SharedRotelAmpConn](#SharedRotelAmpConn) is used in preference to the basic [RotelAmpConn](#RotelAmpConn).  Either way, use the context manager factory methods to create a connection.  E.g.:
+The `RotelAmpConn` connection objects encapsulate most of the functionality of the library.
 
 ```python
-    from rsp1570serial.connection import create_shared_rotel_amp_conn
-    from rsp1570serial.utils import get_platform_serial_port
+from rsp1570serial.connection import RotelAmpConn
+from rsp1570serial.rotel_model_meta import RSP1570_META
 
-    async def do_something(serial_port=None):
-        if serial_port is None:
-            serial_port = get_platform_serial_port()
-
-        async with create_shared_rotel_amp_conn(serial_port) as shared_conn:
-            conn = shared_conn.new_client_conn()
-            # Do something here
+conn = RotelAmpConn(serial_port, RSP1570_META)
+await conn.open()
+await conn.send_command("POWER_TOGGLE")
+await conn.close()
 ```
 
 The serial_port parameter can be anything that can be passed to `serial.serial_for_url()`.  E.g.
 
-* `/dev/ttyUSB0` (Linux)
-* `COM3` (Windows)
-* `socket://192.168.0.100:50000` (if you are using a TCP/IP to serial  converter)
+| Context                      | Serial Port Parameter              |
+|------------------------------|------------------------------------|
+| Linux port                   | `/dev/ttyUSB0`                     |
+| Windows port                 | `COM3`                             |
+| TCP/IP to serial  converter  | `socket://192.168.0.100:50000`     |
 
 An exception is thrown if a connection cannot be made to the specified device.
 
-## send_command(command_code)
+The meta parameter describes the particular model of Rotel that will be communicated with.   See [RotelModelMeta](#RotelModelMeta) for details.
 
-Send a command (see `commands.py` for the full list):
+The factory function `create_rotel_amp_conn` returns a context manager that will properly manage the connection lifecycle.
+
+```python
+from rsp1570serial.connection import create_rotel_amp_conn
+from rsp1570serial.process_command import process_command
+from rsp1570serial.rotel_model_meta import RSP1570_META
+
+async with create_rotel_amp_conn(serial_port, RSP1570_META) as conn:
+    await conn.send_command("POWER_TOGGLE")
+```
+
+## Sending Commands Asynchronously
+
+Send a command (see `rsp1570_meta.py` or `rsp1572_meta.py` for the full list):
 
 ```python
     await conn.send_command('MUTE_TOGGLE')
 ```
 
-## send_volume_direct_command(zone, volume)
+## Sending Volume Direct Commands Asynchronously
 
-Send a volume direct command to a zone:
+Send a volume direct command to a zone.  This set the absolute volume in a zone to any value between `MIN_VOLUME` and `MAX_VOLUME`
 
 ```python
     from rsp1570serial.commands import MIN_VOLUME, MAX_VOLUME
@@ -62,144 +75,72 @@ Send a volume direct command to a zone:
     await conn.send_volume_direct_command(zone, 50)
 ```
 
-## read_messages()
+## Reading Messages Asynchronously
 
 Read the input stream from the device:
 
 ```python
     async for message in conn.read_messages():
-        if (isinstance(message, (FeedbackMessage, TriggerMessage))):
+        if isinstance(message, AnyMessage):
             message.log()
         else:
             logging.warning("Unknown message type encountered")
 ```
 
-## conn.process_command(command_code, time_window=DEFAULT_TIME_WINDOW)
+## Sending a command and reading the response message(s) synchronously
 
-Send a command and then collect all messages that arrive in `time_window`.  Class constants are provided with recommended time windows.   Note that the 'POWER_ON' command needs a longer time window than other commands.
+Send a command and then collect all messages that arrive in a short time_window.
 
 ```python
-    async with create_test_shared_conn() as shared_conn:
-        conn = shared_conn.new_client_conn()
-        messages = await conn.process_command('POWER_ON', conn.POWER_ON_TIME_WINDOW)
+async with create_rotel_amp_conn(serial_port, RSP1570_META) as conn:
+    messages = await process_command(conn, "POWER_TOGGLE")
 ```
 
-This command can be handy for scripting-like automations.   See `discovery.py` for an example.
+This command can be handy for scripting-like automations.   See `example1.py` for an example.
 
-## Messages
+## Response messages
 
-The `conn.read_messages()` and `conn.process_command()` methods will return a message-type specific object containing the message data.  Two types of message can be encountered:
+The `conn.read_messages()` and `process_command()` methods will return a message-type specific object containing the message data.  Two types of message can be encountered:
 
 * [FeedbackMessage](#FeedbackMessage): Reflects what is shown on the front-panel display.   Received when the display changes.
+* [SmartDisplayMessage](#SmartDisplayMessage): RSP-1572 only.   When the iPod/USB input is in use, the unit will send additional information representing the metadata from the USB source device.  This is sent in addition to the standard feedback string.
 * [TriggerMessage](#TriggerMessage): Received whenever the 12V triggers change state.
+
+## RotelModelMeta
+
+The `RotelModelMeta` class encapsulates the description of a particular model of amp.  It comprises:
+
+* the model name
+* an instance of [MessageCodec](#MessageCodec) that describes the supported commands.
+* a list of source meta data, comprising source standard name and command code
+
+## MessageCodec
+
+This class describes the commands supported by a particular model of receiver.  It currenly encapsuates the device id, the supported messages and the max/min volume.
+
+See `rsp1570_meta.py` or `rsp1572_meta.py` for the full desription of each model.
 
 ## Source Aliases
 
 The user of a Rotel Amplifier can customise the name shown on the display for each source.   These 'aliases' are the names that will be found in the `source_name` field of the [FeedbackMessage](#FeedbackMessage) rather than the official source names.  For example, a user might configure the name of the 'VIDEO 1' source to be 'CATV'.  In this instance, the client software would need to know to send the 'SOURCE_VIDEO_1' `command_code` in order to select the source that the user knows as 'CATV'.
 
-## discover_source_aliases(serial_port)
-
-This is a utility function that can be used by Home Automation software to discover the aliases for all of the sources.   It returns a dictionary that maps each source alias to the `command_code` needed to switch to that source.   The discovery process is not quick so it is recommended to use this utility in the initial device configuration rather than each time the Home Automation software is started.
+The function `discover_source_aliases` is a utility that can be used by Home Automation software to discover the aliases for all of the sources.   It returns a dictionary that maps each source alias to the `command_code` needed to switch to that source.   The discovery process is not quick so it is recommended to use this utility in the initial device configuration rather than each time the Home Automation software is started.
 
 ```python
-        source_map = await discover_source_aliases(serial_port)
-        self.assertDictEqual(source_map, {
-            'CATV': 'SOURCE_VIDEO_1', 'NMT': 'SOURCE_VIDEO_2',
-            'APPLE TV': 'SOURCE_VIDEO_3', 'FIRE TV': 'SOURCE_VIDEO_4',
-            'BLU RAY': 'SOURCE_VIDEO_5', 'TUNER': 'SOURCE_TUNER',
-            'TAPE': 'SOURCE_TAPE', 'MULTI': 'SOURCE_MULTI_INPUT',
-            ' CD': 'SOURCE_CD'})
+source_map = await discover_source_aliases(conn)
+self.assertDictEqual(source_map, {
+    'CATV': 'SOURCE_VIDEO_1', 'NMT': 'SOURCE_VIDEO_2',
+    'APPLE TV': 'SOURCE_VIDEO_3', 'FIRE TV': 'SOURCE_VIDEO_4',
+    'BLU RAY': 'SOURCE_VIDEO_5', 'TUNER': 'SOURCE_TUNER',
+    'TAPE': 'SOURCE_TAPE', 'MULTI': 'SOURCE_MULTI_INPUT',
+    ' CD': 'SOURCE_CD'})
 ```
 
 ## Examples
 
-Please see example1.py and example2.py and the test suite for fully working examples.
+Please see `example1.py` and `example2.py` and the test suite for fully working examples.
 
-# Objects
-
-## RotelAmpConn
-
-The RotelAmpConn object is the basic connection object.   It can be used to establish a single, dedicated connection to the device, send commands and read responses.  Consider using [SharedRotelAmpConn](#SharedRotelAmpConn) in preference to this lower level object.
-
-Use the `create_rotel_amp_conn` context manager as a factory:
-
-```python
-    from rsp1570serial.connection import create_rotel_amp_conn
-    from rsp1570serial.utils import get_platform_serial_port
-
-    async def do_something(serial_port=None):
-        if serial_port is None:
-            serial_port = get_platform_serial_port()
-
-        async with create_rotel_amp_conn(serial_port) as conn:
-            # Do something here
-```
-
-Method|Description
----|---
-`create_rotel_amp_conn(serial_port, device_id=DEVICE_ID_RSP1570)`| Context manager to create and open a connection.   Device id can be DEVICE_ID_RSP1572.
-`conn.send_command(command_code)`| Send a command (see `commands.py` for the full list)
-`conn.send_volume_direct_command(zone, volume)`| Set the absolute volume in a zone
-`conn.read_messages()`| Iterator that reads the messages from the device.   See [read_messages](#read_messages) for more information.
-
-## SharedRotelAmpConn
-
-Wraps a [RotelAmpConn](#RotelAmpConn) object and allows it to be shared.
-
-Use the `create_shared_rotel_amp_conn` context manager as a factory:
-
-```python
-    import asyncio
-    from rsp1570serial.connection import create_shared_rotel_amp_conn
-    from rsp1570serial.utils import get_platform_serial_port
-
-    async def do_something(serial_port=None):
-        if serial_port is None:
-            serial_port = get_platform_serial_port()
-
-        async with create_shared_rotel_amp_conn(serial_port) as shared_conn:
-            logger_conn = shared_conn.new_client_conn()
-            logger_task = asyncio.create_task(do_something_else(logger_conn))
-            cmd_conn = shared_conn.new_client_conn()
-            await cmd_conn.process_command('POWER_ON', conn.POWER_ON_TIME_WINDOW)
-            await cmd_conn.process_command('SOURCE_VIDEO_1')
-            await cmd_conn.process_command('VOLUME_UP')
-            await logger_task
-
-    async def log_all_messages(conn):
-        async for message in conn.read_messages():
-            message.log()
-        
-```
-
-Method|Description
----|---
-`create_shared_rotel_amp_conn(serial_port)`| Context manager to create and open a shared connection
-`shared_conn.new_client_conn()`| Create a new client connection of type [SharedRotelAmpClientConn](#SharedRotelAmpClientConn)
-
-## SharedRotelAmpClientConn
-
-A client connection.   Supports sending commands and receiving messages.  Also supports a mechanism to send a command and collect all of the messages received in a time window, which can be useful for script-like automation of the amplifier.
-
-If the client code is not consuming messages from the connection then they will be queued up internally until one of the message consuming methods is called.  Two client connections of the same shared connection are completely independent and can be read at different speeds without back pressure.
-
-When finished with the object, simply dereference it and it will be garbage collected.
-
-Method|Description
----|---
-`conn.send_command(command_code)`| Send a command (see `commands.py` for the full list)
-`conn.send_volume_direct_command(zone, volume)`| Set the absolute volume in a zone
-`conn.read_messages()`| Iterator that reads the messages from the device.   See [read_messages](#read_messages) for more information.
-`conn.collect_messages()`| Collect all internally queued messages (emptying the queue)
-`conn.process_command(command_code, time_window=DEFAULT_TIME_WINDOW)`| Send a command and then collect all messages that arrive in `time_window`.   See constants below for recommended time windows.
-
-
-
-Constant|Description
----|---
-`conn.POWER_ON_TIME_WINDOW`| Recommended `time_window` to be used after a 'POWER_ON' command
-`conn.DEFAULT_TIME_WINDOW`| Recommended `time_window` to be used after most commands
-
+# Response Message Classes
 
 ## FeedbackMessage
 
@@ -288,8 +229,21 @@ The method `flags_to_list()` returns a list of the following form:
 ]
 ```
 
+## SmartDisplayMessage (RSP-1572 only)
+
+When the iPod/USB input is in use, the unit will send additional information representing the metadata from the USB source device.  This is sent in addition to the standard feedback string
+
+This object has an array of `lines` of text and an integer `start` indicating what the line number of the top line is.
+
+There are two types of Smart Display Message:
+
+* Smart Display Data String 1 has 1 line of information and start line 1.
+* Smart Display Data String 2 has 9 lines of information and start line 2.
+
+The Rotel receiver uses certain special characters on the display which are mapped to roughly equivalent unicode characters in the `lines` array.
+
 # Emulator
-The package also includes an RSP-1570 emulator that can be used for demonstration or testing purposes.   It can also be used in Home Assistant with the rotel_rsp1570 media player platform.
+The package also includes an RSP-1570/RSP-1572 emulator that can be used for demonstration or testing purposes.   It can also be used in Home Assistant with the rotel_rsp1570 media player platform.
 
 Examples of usage:
 
@@ -305,6 +259,9 @@ python3 -m rsp1570serial.emulator -p 50002 --alias_video_1  CATV --alias_video_2
 
 # Start the emulator in the on state
 python3 -m rsp1570serial.emulator --is_on
+
+# Emulate an RSP-1572
+python3 -m rsp1570serial.emulator --model rsp1572
 ```
 
 Full list of options:
@@ -315,11 +272,13 @@ Option|Description
 `-o` or `--is_on`|If set then the emulator will be turned on initially
 `-m <rsp1570 or rsp1572>` or `--model <rsp1570 or rsp1572>`|Device model
 `--cd <str>` or `--alias_cd <str>`|Alias for the CD source
-`--tape <str>` or `--alias_tape <str>`|Alias for the TAPE source
+`--tape <str>` or `--alias_tape <str>`|Alias for the TAPE source (RSP1570 only)
 `--tuner <str>` or `--alias_tuner <str>`|Alias for the TUNER source
 `--video_1 <str>` or `--alias_video_1 <str>`|Alias for the VIDEO 1 source
 `--video_2 <str>` or `--alias_video_2 <str>`|Alias for the VIDEO 2 source
 `--video_3 <str>` or `--alias_video_3 <str>`|Alias for the VIDEO 3 source
 `--video_4 <str>` or `--alias_video_4 <str>`|Alias for the VIDEO 4 source
 `--video_5 <str>` or `--alias_video_5 <str>`|Alias for the VIDEO 5 source
+`--video_6 <str>` or `--alias_video_6 <str>`|Alias for the VIDEO 6 source (RSP1572 only)
+`--ipod <str>` or `--alias_ipod <str>` or `--usb <str>` or `--alias_usb <str>`|Alias for the iPod/USB source (RSP1572 only)
 `--multi <str>` or `--alias_multi <str>`|Alias for the MULTI source
