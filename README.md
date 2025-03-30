@@ -5,7 +5,7 @@ An asyncio based package to talk to a Rotel RSP-1570 or RSP-1572 processor using
 The respective protocol defintions are documented here:
 
 | Model                                                                                      |
-----------------------------------------------------------------------------------------------
+|--------------------------------------------------------------------------------------------|
 | [RSP-1570](https://www.rotel.com/sites/default/files/product/rs232/RSP1570%20Protocol.pdf) |
 | [RSP-1572](https://www.rotel.com/sites/default/files/product/rs232/RSP1572%20Protocol.pdf) |
 
