@@ -1,11 +1,12 @@
 from unittest import TestCase
 
-from rsp1570serial.rsp1570_meta import RSP1570_CODEC
+from rsp1570serial.messages import MessageCodec
+from rsp1570serial.rotel_model_meta import RSP1570_META
 
 
 class RotelTestCommands(TestCase):
     def setUp(self) -> None:
-        self.codec = RSP1570_CODEC
+        self.codec = MessageCodec(RSP1570_META)
 
     def test_encode_power_toggle(self):
         self.assertEqual(

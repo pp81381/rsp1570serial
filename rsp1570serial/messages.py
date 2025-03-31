@@ -3,32 +3,34 @@ from dataclasses import dataclass
 from typing import AsyncGenerator, Callable, Dict, List, Union
 
 from rsp1570serial.icons import flags_to_icons, icons_that_are_on
+from rsp1570serial.message_types import (
+    MSGTYPE_FEEDBACK_STRING,
+    MSGTYPE_MAIN_ZONE_COMMANDS,
+    MSGTYPE_PRIMARY_COMMANDS,
+    MSGTYPE_PRIMARY_KEY_RELEASED_COMMANDS,
+    MSGTYPE_RECORD_SOURCE_COMMANDS,
+    MSGTYPE_TRIGGER_DIRECT_COMMANDS,
+    MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_1,
+    MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_2,
+    MSGTYPE_TRIGGER_STATUS_STRING,
+    MSGTYPE_VOLUME_DIRECT_COMMANDS,
+    MSGTYPE_ZONE_2_COMMANDS,
+    MSGTYPE_ZONE_2_VOLUME_DIRECT_COMMANDS,
+    MSGTYPE_ZONE_3_COMMANDS,
+    MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS,
+    MSGTYPE_ZONE_4_COMMANDS,
+    MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS,
+)
 from rsp1570serial.protocol import (
     AnyAsyncReader,
     decode_protocol_stream,
     encode_payload,
 )
+from rsp1570serial.rotel_model_meta import RotelModelMeta
 from rsp1570serial.utils import pretty_print_bytes
 
 _LOGGER = logging.getLogger(__name__)
 
-
-MSGTYPE_PRIMARY_COMMANDS = 0x10
-MSGTYPE_PRIMARY_KEY_RELEASED_COMMANDS = 0x11  # RSP1572
-MSGTYPE_MAIN_ZONE_COMMANDS = 0x14
-MSGTYPE_RECORD_SOURCE_COMMANDS = 0x15
-MSGTYPE_ZONE_2_COMMANDS = 0x16
-MSGTYPE_ZONE_3_COMMANDS = 0x17
-MSGTYPE_ZONE_4_COMMANDS = 0x18
-MSGTYPE_FEEDBACK_STRING = 0x20
-MSGTYPE_TRIGGER_STATUS_STRING = 0x21
-MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_1 = 0x22  # RSP1572
-MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_2 = 0x23  # RSP1572
-MSGTYPE_VOLUME_DIRECT_COMMANDS = 0x30
-MSGTYPE_ZONE_2_VOLUME_DIRECT_COMMANDS = 0x32
-MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS = 0x33
-MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS = 0x34
-MSGTYPE_TRIGGER_DIRECT_COMMANDS = 0x40
 
 INVERT_F_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER F}".encode("utf-8")
 INVERT_M_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER M}".encode("utf-8")
@@ -337,28 +339,25 @@ def get_message_handler(message_type: int) -> Callable[[int, bytes], AnyMessage]
 
 @dataclass
 class MessageCodec:
-    device_id: int
-    messages: Dict[str, List[int]]
-    min_volume: int
-    max_volume: int
+    meta: RotelModelMeta
 
     def encode_command(self, command_name: str) -> bytes:
-        [message_type, key] = self.messages[command_name]
-        return encode_payload([self.device_id, message_type, key])
+        [message_type, key] = self.meta.messages[command_name]
+        return encode_payload([self.meta.device_id, message_type, key])
 
     def encode_volume_direct_command(self, zone: int, volume: int) -> bytes:
         message_type = get_volume_direct_message_type(zone)
 
-        if volume < self.min_volume or volume > self.max_volume:
+        if volume < self.meta.min_volume or volume > self.meta.max_volume:
             raise ValueError("Volume out of range: {}".format(volume))
 
-        return encode_payload([self.device_id, message_type, volume])
+        return encode_payload([self.meta.device_id, message_type, volume])
 
     def decode_message(self, payload: bytes) -> AnyMessage:
-        if payload[0] != self.device_id:
+        if payload[0] != self.meta.device_id:
             raise RotelMessageError(
                 "Didn't get expected Device ID byte.  {} != {}".format(
-                    payload[0], self.device_id
+                    payload[0], self.meta.device_id
                 )
             )
 
@@ -372,9 +371,3 @@ class MessageCodec:
     ) -> AsyncGenerator[AnyMessage, None]:
         async for payload in decode_protocol_stream(ser):
             yield self.decode_message(payload)
-
-    def index_command_messages(self) -> Dict[bytes, str]:
-        command_code_lookup = {}
-        for code, value in self.messages.items():
-            command_code_lookup[bytes(value)] = code
-        return command_code_lookup

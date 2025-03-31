@@ -1,6 +1,5 @@
 from unittest import IsolatedAsyncioTestCase
 
-from rsp1570serial.emulator import INITIAL_SOURCE
 from rsp1570serial.messages import FeedbackMessage
 from rsp1570serial.process_command import process_command
 from rsp1570serial.rotel_model_meta import RSP1570_META
@@ -42,7 +41,7 @@ class AsyncTestProcessCommandFromOn(IsolatedAsyncioTestCase):
         self.assertEqual(self.helper.device._is_muted, True)
 
     async def test_process_source_cd(self):
-        self.assertEqual(self.helper.device._source, INITIAL_SOURCE)
+        self.assertEqual(self.helper.device._source, self.helper.meta.initial_source)
         async with self.helper.create_conn() as conn:
             messages = await process_command(conn, "SOURCE_CD")
         self.assertEqual(self.helper.device._source, " CD")

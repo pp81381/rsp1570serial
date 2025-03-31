@@ -54,7 +54,7 @@ async with create_rotel_amp_conn(serial_port, RSP1570_META) as conn:
 
 ## Sending Commands Asynchronously
 
-Send a command (see `rsp1570_meta.py` or `rsp1572_meta.py` for the full list):
+Send a command (see `rsp1570_messages.py` or `rsp1572_messages.py` for the full list):
 
 ```python
     await conn.send_command('MUTE_TOGGLE')
@@ -62,16 +62,10 @@ Send a command (see `rsp1570_meta.py` or `rsp1572_meta.py` for the full list):
 
 ## Sending Volume Direct Commands Asynchronously
 
-Send a volume direct command to a zone.  This set the absolute volume in a zone to any value between `MIN_VOLUME` and `MAX_VOLUME`
+Send a volume direct command to a zone.  This set the absolute volume in a zone to a value between the range defined in the model meta data.
 
 ```python
-    from rsp1570serial.commands import MIN_VOLUME, MAX_VOLUME
-
     zone = 1
-    await conn.send_volume_direct_command(zone, MAX_VOLUME)
-    await asyncio.sleep(1)
-    await conn.send_volume_direct_command(zone, MIN_VOLUME)
-    await asyncio.sleep(1)
     await conn.send_volume_direct_command(zone, 50)
 ```
 
@@ -111,14 +105,15 @@ The `conn.read_messages()` and `process_command()` methods will return a message
 The `RotelModelMeta` class encapsulates the description of a particular model of amp.  It comprises:
 
 * the model name
-* an instance of [MessageCodec](#MessageCodec) that describes the supported commands.
+* the device id
+* the supported commands
+* the min/max/initial volume
 * a list of source meta data, comprising source standard name and command code
+* the initial source
 
 ## MessageCodec
 
-This class describes the commands supported by a particular model of receiver.  It currenly encapsuates the device id, the supported messages and the max/min volume.
-
-See `rsp1570_meta.py` or `rsp1572_meta.py` for the full desription of each model.
+Given the meta data, this class implements the commands supported by a particular model of receiver
 
 ## Source Aliases
 

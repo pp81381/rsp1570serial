@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 from serial import PARITY_NONE, STOPBITS_ONE  # type: ignore[import-untyped]
 from serial_asyncio_fast import open_serial_connection  # type: ignore[import-untyped]
 
-from rsp1570serial.messages import AnyMessage
+from rsp1570serial.messages import AnyMessage, MessageCodec
 from rsp1570serial.rotel_model_meta import RotelModelMeta
 
 
@@ -42,19 +42,20 @@ class RotelAmpConn:
 
     async def send_command(self, command_name: str):
         if self.writer is not None:
-            self.writer.write(self.meta.codec.encode_command(command_name))
+            codec = MessageCodec(self.meta)
+            self.writer.write(codec.encode_command(command_name))
             await self.writer.drain()
 
     async def send_volume_direct_command(self, zone: int, volume: int):
         if self.writer is not None:
-            self.writer.write(
-                self.meta.codec.encode_volume_direct_command(zone, volume)
-            )
+            codec = MessageCodec(self.meta)
+            self.writer.write(codec.encode_volume_direct_command(zone, volume))
             await self.writer.drain()
 
     async def read_messages(self) -> AsyncGenerator[AnyMessage, None]:
         assert self.reader is not None
-        async for message in self.meta.codec.decode_message_stream(self.reader):
+        codec = MessageCodec(self.meta)
+        async for message in codec.decode_message_stream(self.reader):
             yield message
 
 

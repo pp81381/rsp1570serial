@@ -8,23 +8,18 @@ from typing import Dict, List, Optional, Union
 from weakref import WeakSet
 
 from rsp1570serial.icons import icon_list_to_flags
-from rsp1570serial.messages import (
+from rsp1570serial.message_types import (
     MSGTYPE_FEEDBACK_STRING,
     MSGTYPE_VOLUME_DIRECT_COMMANDS,
     MSGTYPE_ZONE_2_VOLUME_DIRECT_COMMANDS,
     MSGTYPE_ZONE_3_VOLUME_DIRECT_COMMANDS,
     MSGTYPE_ZONE_4_VOLUME_DIRECT_COMMANDS,
-    CommandMessage,
 )
+from rsp1570serial.messages import CommandMessage, MessageCodec
 from rsp1570serial.protocol import encode_payload
 from rsp1570serial.rotel_model_meta import ROTEL_MODELS, RotelModelMeta
 
 EMULATOR_DEFAULT_PORT = 50001
-
-MIN_VOLUME = 0
-MAX_VOLUME = 96
-INITIAL_VOLUME = 50
-INITIAL_SOURCE = "VIDEO 1"
 
 VOLUME_DIRECT_MESSAGE_TYPES = set(
     [
@@ -169,7 +164,7 @@ class RotelRSP1570Emulator:
         aliases: Optional[Dict[str, str]] = None,
         is_on: bool = False,
     ):
-        self._codec = meta.codec
+        self._meta = meta
         self._aliases = {} if aliases is None else aliases
         self._is_on = is_on
         self._writer = None
@@ -177,8 +172,8 @@ class RotelRSP1570Emulator:
         self._mute_blink_count = 0
         self._blinker = Blinker(self.mute_blink)
         self._is_party_mode = False
-        self._volume = INITIAL_VOLUME
-        self._source = INITIAL_SOURCE
+        self._volume = meta.initial_volume
+        self._source = meta.initial_source
         self._observers: WeakSet[StreamWriter] = WeakSet()
 
     @only_if_on
@@ -194,7 +189,7 @@ class RotelRSP1570Emulator:
                 await self.write_feedback_message()
         else:
             self._is_on = True
-            self._volume = INITIAL_VOLUME
+            self._volume = self._meta.initial_volume
             await asyncio.sleep(1.5)
             await self._mute_off_no_feedback()
             await self.write_feedback_message()
@@ -209,7 +204,7 @@ class RotelRSP1570Emulator:
     async def set_volume(self, level: int) -> None:
         if self._is_muted:
             await self._mute_off_no_feedback()
-        if level < MIN_VOLUME or level > MAX_VOLUME:
+        if level < self._meta.min_volume or level > self._meta.max_volume:
             return
         self._volume = level
         await self.write_feedback_message()
@@ -305,7 +300,7 @@ class RotelRSP1570Emulator:
         return "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
     def encode_feedback_message(self) -> bytes:
-        payload = bytearray([self._codec.device_id, MSGTYPE_FEEDBACK_STRING])
+        payload = bytearray([self._meta.device_id, MSGTYPE_FEEDBACK_STRING])
         payload.extend(self.display_line_1.encode())
         payload.extend(self.info.encode())
         payload.extend(icon_list_to_flags(self.icon_list))
@@ -329,11 +324,12 @@ class RotelRSP1570Emulator:
 
 class CommandHandler:
     def __init__(self, device: RotelRSP1570Emulator):
-        self._command_code_lookup = device._codec.index_command_messages()
+        self._command_code_lookup = device._meta.index_command_messages()
         self._device = device
 
     async def handle_command_stream(self, reader):
-        async for message in self._device._codec.decode_message_stream(reader):
+        codec = MessageCodec(self._device._meta)
+        async for message in codec.decode_message_stream(reader):
             if isinstance(message, CommandMessage):
                 await self.handle_command(message)
             else:

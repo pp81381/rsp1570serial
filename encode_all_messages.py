@@ -1,13 +1,15 @@
 import logging
 
 from example_runner import process_command_args
+from rsp1570serial.messages import MessageCodec
 from rsp1570serial.rotel_model_meta import ROTEL_MODELS, RotelModelMeta
 from rsp1570serial.utils import pretty_print_bytes
 
 
 def do_it(meta: RotelModelMeta):
-    for cmd in meta.codec.messages.keys():
-        encoded = meta.codec.encode_command(cmd)
+    codec = MessageCodec(meta)
+    for cmd in meta.messages.keys():
+        encoded = codec.encode_command(cmd)
         print(f"{pretty_print_bytes(encoded)}:{cmd}")
 
 

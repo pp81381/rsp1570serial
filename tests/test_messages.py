@@ -1,12 +1,14 @@
 import logging
 from unittest import IsolatedAsyncioTestCase, TestCase
 
-from rsp1570serial.messages import (
+from rsp1570serial.message_types import (
     MSGTYPE_PRIMARY_COMMANDS,
     MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_1,
     MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_2,
     MSGTYPE_VOLUME_DIRECT_COMMANDS,
     MSGTYPE_ZONE_3_COMMANDS,
+)
+from rsp1570serial.messages import (
     FeedbackMessage,
     MessageCodec,
     SmartDisplayMessage,
@@ -15,7 +17,7 @@ from rsp1570serial.messages import (
     smart_display_string_2_handler,
 )
 from rsp1570serial.protocol import AnyAsyncReader, StreamProxy
-from rsp1570serial.rsp1570_meta import RSP1570_CODEC
+from rsp1570serial.rotel_model_meta import RSP1570_META
 
 
 async def decode_all_messages(codec: MessageCodec, ser: AnyAsyncReader):
@@ -33,22 +35,22 @@ async def decode_single_message(codec: MessageCodec, ser: AnyAsyncReader):
 
 class RotelTestReverseLookupCommand(TestCase):
     def setUp(self) -> None:
-        self.codec = RSP1570_CODEC
+        self.meta = RSP1570_META
 
     def test1(self):
-        index = self.codec.index_command_messages()
+        index = self.meta.index_command_messages()
         cmd = index[bytes([MSGTYPE_PRIMARY_COMMANDS, 0x71])]
         self.assertEqual(cmd, "POWER_OFF_ALL_ZONES")
 
     def test2(self):
-        index = self.codec.index_command_messages()
+        index = self.meta.index_command_messages()
         cmd = index[bytes([MSGTYPE_ZONE_3_COMMANDS, 0x71])]
         self.assertEqual(cmd, "ZONE_3_POWER_OFF_ALL_ZONES")
 
 
 class AsyncRotelTestMessages(IsolatedAsyncioTestCase):
     def setUp(self) -> None:
-        self.codec = RSP1570_CODEC
+        self.codec = MessageCodec(RSP1570_META)
 
     async def test_encode_decode(self):
         message = self.codec.encode_command("POWER_TOGGLE")
