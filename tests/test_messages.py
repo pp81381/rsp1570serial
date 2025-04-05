@@ -522,3 +522,19 @@ class SmarSmartDisplayMessageTest(TestCase):
             ],
         )
         self.assertEqual(m.start, 2)
+
+    def test4(self):
+        data = b"\x00\x00" + b"1234567890123\x8d567890123456"
+        with self.assertLogs(level=logging.WARNING) as cm:
+            m = smart_display_string_1_handler(
+                MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_1, data
+            )
+        self.assertEqual(m.lines, ["INVALID LINE"])
+        self.assertEqual(m.start, 1)
+        self.assertEqual(
+            cm.output,
+            [
+                "WARNING:rsp1570serial.messages:Error decoding smart display line: "
+                "b'1234567890123\\x8d567890123456'"
+            ],
+        )

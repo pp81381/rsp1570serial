@@ -262,7 +262,12 @@ def decode_smart_display_line(line_bytes: bytes) -> str:
         .replace(b"\x8b", CURSOR_RIGHT_BYTES)
         .replace(b"\x8c", CURSOR_LEFT_BYTES)
     )
-    line = line_bytes.decode(encoding="utf-8")
+    try:
+        line = line_bytes.decode(encoding="utf-8")
+    except UnicodeDecodeError as e:
+        _LOGGER.warning("Error decoding smart display line: %r", line_bytes)
+        line = "INVALID LINE"
+
     return line.rstrip()
 
 

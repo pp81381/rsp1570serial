@@ -57,6 +57,28 @@ async def run_mute_commands(conn: RotelAmpConn) -> None:
     await asyncio.sleep(3)
 
 
+async def probe_rsp1572(conn: RotelAmpConn) -> None:
+    await asyncio.sleep(3)
+    await send_command_and_log(conn, "POWER_ON")
+    await asyncio.sleep(3)
+    await send_command_and_log(conn, "DISPLAY_REFRESH")
+    await asyncio.sleep(3)
+    await send_command_and_log(conn, "SOURCE_IPOD_USB")
+    await asyncio.sleep(3)
+    await send_command_and_log(conn, "DISPLAY_REFRESH")
+    await asyncio.sleep(3)
+    await send_command_and_log(conn, "PLAY")
+    await asyncio.sleep(3)
+    await send_command_and_log(conn, "DISPLAY_REFRESH")
+    await asyncio.sleep(3)
+    await send_command_and_log(conn, "PAUSE")
+    await asyncio.sleep(3)
+    await send_command_and_log(conn, "DISPLAY_REFRESH")
+    await asyncio.sleep(3)
+    await send_command_and_log(conn, "POWER_OFF")
+    await asyncio.sleep(3)
+
+
 async def run_multi_mute(conn: RotelAmpConn) -> None:
     await run_command_n_times(conn, "MUTE_TOGGLE", 3.0, 4)
 
@@ -67,6 +89,7 @@ async def main():
         "misc": run_misc_commands,  # Power should be on
         "mute": run_mute_commands,  # Power should be off
         "multi_mute": run_multi_mute,  # Power should be on
+        "probe_rsp1572": probe_rsp1572,  # Power should be off, model should be rsp1572
     }
     args = process_example_args(list(EXAMPLES.keys()))
     async with create_rotel_amp_conn(
