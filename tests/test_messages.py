@@ -474,6 +474,22 @@ class SmartMessageDecoderTest(TestCase):
         result = decode_smart_display_line(b"Hello World \x80")
         self.assertEqual(result, "Hello World \N{CIRCLED LATIN CAPITAL LETTER F}")
 
+    def test3(self):
+        result = decode_smart_display_line(b"Hello World \x00\x80")
+        self.assertEqual(result, "Hello World  \N{CIRCLED LATIN CAPITAL LETTER F}")
+
+    def test4(self):
+        with self.assertLogs(level=logging.WARNING) as cm:
+            result = decode_smart_display_line(b"Hello World \x8d")
+        self.assertEqual(result, "INVALID LINE")
+        self.assertEqual(
+            cm.output,
+            [
+                "WARNING:rsp1570serial.messages:Error decoding smart display line: "
+                "b'Hello World \\x8d'"
+            ],
+        )
+
 
 class SmarSmartDisplayMessageTest(TestCase):
     def test1(self):
@@ -522,19 +538,3 @@ class SmarSmartDisplayMessageTest(TestCase):
             ],
         )
         self.assertEqual(m.start, 2)
-
-    def test4(self):
-        data = b"\x00\x00" + b"1234567890123\x8d567890123456"
-        with self.assertLogs(level=logging.WARNING) as cm:
-            m = smart_display_string_1_handler(
-                MSGTYPE_TRIGGER_SMART_DISPLAY_STRING_1, data
-            )
-        self.assertEqual(m.lines, ["INVALID LINE"])
-        self.assertEqual(m.start, 1)
-        self.assertEqual(
-            cm.output,
-            [
-                "WARNING:rsp1570serial.messages:Error decoding smart display line: "
-                "b'1234567890123\\x8d567890123456'"
-            ],
-        )

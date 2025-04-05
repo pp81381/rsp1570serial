@@ -261,6 +261,7 @@ def decode_smart_display_line(line_bytes: bytes) -> str:
         .replace(b"\x8a", LEFT_BYTES)
         .replace(b"\x8b", CURSOR_RIGHT_BYTES)
         .replace(b"\x8c", CURSOR_LEFT_BYTES)
+        .replace(b"\x00", b"\x20")
     )
     try:
         line = line_bytes.decode(encoding="utf-8")
