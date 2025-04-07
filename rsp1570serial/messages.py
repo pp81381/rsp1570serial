@@ -32,19 +32,36 @@ from rsp1570serial.utils import pretty_print_bytes
 _LOGGER = logging.getLogger(__name__)
 
 
-INVERT_F_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER F}".encode("utf-8")
-INVERT_M_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER M}".encode("utf-8")
-INVERT_T_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER T}".encode("utf-8")
-INVERT_R_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER R}".encode("utf-8")
-INVERT_S_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER S}".encode("utf-8")
-INVERT_A_BYTES = "\N{CIRCLED LATIN CAPITAL LETTER A}".encode("utf-8")
+INVERT_F_BYTES = "\N{NEGATIVE CIRCLED LATIN CAPITAL LETTER F}".encode("utf-8")
+INVERT_M_BYTES = "\N{NEGATIVE CIRCLED LATIN CAPITAL LETTER M}".encode("utf-8")
+INVERT_T_BYTES = "\N{NEGATIVE CIRCLED LATIN CAPITAL LETTER T}".encode("utf-8")
+INVERT_R_BYTES = "\N{NEGATIVE CIRCLED LATIN CAPITAL LETTER R}".encode("utf-8")
+INVERT_S_BYTES = "\N{NEGATIVE CIRCLED LATIN CAPITAL LETTER S}".encode("utf-8")
+INVERT_A_BYTES = "\N{NEGATIVE CIRCLED LATIN CAPITAL LETTER A}".encode("utf-8")
 FULL_BAR_BYTES = "\N{BOX DRAWINGS LIGHT HORIZONTAL}".encode("utf-8")
 RIGHT_BYTES = "\N{BLACK MEDIUM RIGHT-POINTING TRIANGLE}".encode("utf-8")
-PAUSE_BYTES = "\N{DOUBLE VERTICAL BAR}".encode("utf-8")
-STOP_BYTES = "\N{BLACK SQUARE FOR STOP}".encode("utf-8")
+PAUSE_BYTES = "\N{DOUBLE VERTICAL BAR}\N{VARIATION SELECTOR-15}".encode("utf-8")
+STOP_BYTES = "\N{BLACK MEDIUM SQUARE}".encode("utf-8")
 LEFT_BYTES = "\N{BLACK MEDIUM LEFT-POINTING TRIANGLE}".encode("utf-8")
-CURSOR_RIGHT_BYTES = "\N{RIGHTWARDS DOUBLE ARROW}".encode("utf-8")
-CURSOR_LEFT_BYTES = "\N{LEFTWARDS DOUBLE ARROW}".encode("utf-8")
+CURSOR_RIGHT_BYTES = "\N{RIGHTWARDS ARROW}".encode("utf-8")
+CURSOR_LEFT_BYTES = "\N{LEFTWARDS ARROW}".encode("utf-8")
+
+SMART_DISPLAY_LINE_MAPPING: Dict[int, bytes] = {
+    0x80: INVERT_F_BYTES,
+    0x81: INVERT_M_BYTES,
+    0x82: INVERT_T_BYTES,
+    0x83: INVERT_R_BYTES,
+    0x84: INVERT_S_BYTES,
+    0x85: INVERT_A_BYTES,
+    0x86: FULL_BAR_BYTES,
+    0x87: RIGHT_BYTES,
+    0x88: PAUSE_BYTES,
+    0x89: STOP_BYTES,
+    0x8A: LEFT_BYTES,
+    0x8B: CURSOR_RIGHT_BYTES,
+    0x8C: CURSOR_LEFT_BYTES,
+    0x00: b"\x20",
+}
 
 
 class RotelMessageError(Exception):
@@ -204,7 +221,7 @@ class SmartDisplayMessage:
 
     def log(self, level=logging.INFO):
         for lineno, line in enumerate(self.lines, self.start):
-            _LOGGER.log(level, f"Display line {lineno}: '{line}'")
+            _LOGGER.log(level, f"Smart display line {lineno}: '{line}'")
 
 
 # Type alias for all message types
@@ -247,26 +264,18 @@ def decode_smart_display_line(line_bytes: bytes) -> str:
     Convert special characters to appropriate unicode equivalents
     Note - this should really be a codec but it works OK
     """
-    line_bytes = (
-        line_bytes.replace(b"\x80", INVERT_F_BYTES)
-        .replace(b"\x81", INVERT_M_BYTES)
-        .replace(b"\x82", INVERT_T_BYTES)
-        .replace(b"\x83", INVERT_R_BYTES)
-        .replace(b"\x84", INVERT_S_BYTES)
-        .replace(b"\x85", INVERT_A_BYTES)
-        .replace(b"\x86", FULL_BAR_BYTES)
-        .replace(b"\x87", RIGHT_BYTES)
-        .replace(b"\x88", PAUSE_BYTES)
-        .replace(b"\x89", STOP_BYTES)
-        .replace(b"\x8a", LEFT_BYTES)
-        .replace(b"\x8b", CURSOR_RIGHT_BYTES)
-        .replace(b"\x8c", CURSOR_LEFT_BYTES)
-        .replace(b"\x00", b"\x20")
-    )
+    mapped_line_bytes = bytearray()
+    for i in line_bytes:
+        mapped_line_bytes.extend(
+            SMART_DISPLAY_LINE_MAPPING.get(i, i.to_bytes(1, "big"))
+        )
+
     try:
-        line = line_bytes.decode(encoding="utf-8")
+        line = mapped_line_bytes.decode(encoding="utf-8")
     except UnicodeDecodeError as e:
-        _LOGGER.warning("Error decoding smart display line: %r", line_bytes)
+        _LOGGER.warning(
+            "Error decoding smart display line: %r -> %r", line_bytes, mapped_line_bytes
+        )
         line = "INVALID LINE"
 
     return line.rstrip()
@@ -362,8 +371,10 @@ class MessageCodec:
     def decode_message(self, payload: bytes) -> AnyMessage:
         if payload[0] != self.meta.device_id:
             raise RotelMessageError(
-                "Didn't get expected Device ID byte.  {} != {}".format(
-                    payload[0], self.meta.device_id
+                "Didn't get expected Device ID byte ({:02X} != {:02X}) while processing {!r}".format(
+                    payload[0],
+                    self.meta.device_id,
+                    payload,
                 )
             )
 
@@ -376,4 +387,13 @@ class MessageCodec:
         self, ser: AnyAsyncReader
     ) -> AsyncGenerator[AnyMessage, None]:
         async for payload in decode_protocol_stream(ser):
-            yield self.decode_message(payload)
+            try:
+                message = self.decode_message(payload)
+            except RotelMessageError as e:
+                logging.error(
+                    "Discarding payload because error occurred in decode_message.  Payload: %r",
+                    payload,
+                    exc_info=e,
+                )
+            else:
+                yield message

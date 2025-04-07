@@ -17,7 +17,7 @@ from rsp1570serial.messages import (
     smart_display_string_2_handler,
 )
 from rsp1570serial.protocol import AnyAsyncReader, StreamProxy
-from rsp1570serial.rotel_model_meta import RSP1570_META
+from rsp1570serial.rotel_model_meta import RSP1570_META, RSP1572_META
 
 
 async def decode_all_messages(codec: MessageCodec, ser: AnyAsyncReader):
@@ -472,11 +472,15 @@ class SmartMessageDecoderTest(TestCase):
 
     def test2(self):
         result = decode_smart_display_line(b"Hello World \x80")
-        self.assertEqual(result, "Hello World \N{CIRCLED LATIN CAPITAL LETTER F}")
+        self.assertEqual(
+            result, "Hello World \N{NEGATIVE CIRCLED LATIN CAPITAL LETTER F}"
+        )
 
     def test3(self):
         result = decode_smart_display_line(b"Hello World \x00\x80")
-        self.assertEqual(result, "Hello World  \N{CIRCLED LATIN CAPITAL LETTER F}")
+        self.assertEqual(
+            result, "Hello World  \N{NEGATIVE CIRCLED LATIN CAPITAL LETTER F}"
+        )
 
     def test4(self):
         with self.assertLogs(level=logging.WARNING) as cm:
@@ -485,9 +489,17 @@ class SmartMessageDecoderTest(TestCase):
         self.assertEqual(
             cm.output,
             [
-                "WARNING:rsp1570serial.messages:Error decoding smart display line: "
-                "b'Hello World \\x8d'"
+                "WARNING:rsp1570serial.messages:"
+                "Error decoding smart display line: b'Hello "
+                "World \\x8d' -> bytearray(b'Hello World \\x8d')"
             ],
+        )
+
+    def test5(self):
+        result = decode_smart_display_line(b"\x89 00:00 \x82000/000 ")
+        self.assertEqual(
+            result,
+            "\N{BLACK MEDIUM SQUARE} 00:00 \N{NEGATIVE CIRCLED LATIN CAPITAL LETTER T}000/000",
         )
 
 
@@ -499,8 +511,8 @@ class SmarSmartDisplayMessageTest(TestCase):
         self.assertEqual(
             cm.output,
             [
-                "INFO:rsp1570serial.messages:Display line 2: 'Line2'",
-                "INFO:rsp1570serial.messages:Display line 3: 'Line3'",
+                "INFO:rsp1570serial.messages:Smart display line 2: 'Line2'",
+                "INFO:rsp1570serial.messages:Smart display line 3: 'Line3'",
             ],
         )
 

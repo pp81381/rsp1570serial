@@ -17,7 +17,11 @@ from rsp1570serial.message_types import (
 )
 from rsp1570serial.messages import CommandMessage, MessageCodec
 from rsp1570serial.protocol import encode_payload
-from rsp1570serial.rotel_model_meta import ROTEL_MODELS, RotelModelMeta
+from rsp1570serial.rotel_model_meta import (
+    ROTEL_MODELS,
+    RSP1572_MODEL_ID,
+    RotelModelMeta,
+)
 
 EMULATOR_DEFAULT_PORT = 50001
 
@@ -181,6 +185,8 @@ class RotelRSP1570Emulator:
         self._is_on = False
         await self._blinker.stop()
         await self.write_feedback_message()
+        await self.write_smart_display_type_1_message()
+        await self.write_smart_display_type_2_message()
 
     async def turn_on(self) -> None:
         if self._is_on:
@@ -193,6 +199,8 @@ class RotelRSP1570Emulator:
             await asyncio.sleep(1.5)
             await self._mute_off_no_feedback()
             await self.write_feedback_message()
+            await self.write_smart_display_type_1_message()
+            await self.write_smart_display_type_2_message()
 
     async def toggle(self) -> None:
         if self._is_on:
@@ -259,10 +267,14 @@ class RotelRSP1570Emulator:
             return
         self._source = source
         await self.write_feedback_message()
+        await self.write_smart_display_type_1_message()
+        await self.write_smart_display_type_2_message()
 
     @only_if_on
     async def display_refresh(self) -> None:
         await self.write_feedback_message()
+        await self.write_smart_display_type_1_message()
+        await self.write_smart_display_type_2_message()
 
     @property
     def info(self) -> str:
@@ -306,6 +318,32 @@ class RotelRSP1570Emulator:
         payload.extend(icon_list_to_flags(self.icon_list))
         return encode_payload(payload)
 
+    def encode_smart_display_line_1(self) -> bytes:
+        """
+        Encode a hardcoded smart display message
+
+        Being a bit lazy here - TODO: build from a property
+        Don't call this for model RSP-1570
+        """
+        if self._is_on and self._source == "iPod/USB":
+            payload = b'\xa5"\x00\x00      iPod/USB PLAYER     '
+        else:
+            payload = b'\xa5"\x00\x00      NOT AVAILABLE       '
+        return encode_payload(payload)
+
+    def encode_smart_display_liness_2_10(self) -> bytes:
+        """
+        Encode a hardcoded smart display message
+
+        Being a bit lazy here - TODO: build from a property
+        Don't call this for model RSP-1570
+        """
+        if self._is_on and self._source == "iPod/USB":
+            payload = b"\xa5#\x89 00:00 \x82000/000 \x00\x00\x00\x00\x00    \x82 No Song                 \x85                         \x85                         \x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86\x86  \x8bE M P T Y                                                                                            "
+        else:
+            payload = b"\xa5#                                                                                                                                                                                                                                          "
+        return encode_payload(payload)
+
     def add_observer(self, writer: StreamWriter) -> None:
         self._observers.add(writer)
         logging.info("New observer")
@@ -320,6 +358,22 @@ class RotelRSP1570Emulator:
             writer.write(msg)
             await writer.drain()
         logging.info("Feedback message written: %r", msg)
+
+    async def write_smart_display_type_1_message(self) -> None:
+        if self._meta.model_id == RSP1572_MODEL_ID:
+            msg = self.encode_smart_display_line_1()
+            for writer in self._observers:
+                writer.write(msg)
+                await writer.drain()
+            logging.info("Smart display message type 1 written: %r", msg)
+
+    async def write_smart_display_type_2_message(self) -> None:
+        if self._meta.model_id == RSP1572_MODEL_ID:
+            msg = self.encode_smart_display_liness_2_10()
+            for writer in self._observers:
+                writer.write(msg)
+                await writer.drain()
+            logging.info("Smart display message type 2 written: %r", msg)
 
 
 class CommandHandler:

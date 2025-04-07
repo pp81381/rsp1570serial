@@ -84,7 +84,7 @@ async def discover_source_aliases(conn: RotelAmpConn) -> Dict[str, str]:
     if final_source_alias != orig_source_alias:
         _LOGGER.warning(
             "%s was not set back to the original source after alias discovery",
-            conn.meta.name,
+            conn.meta.model_id,
         )
 
     if was_probably_off:

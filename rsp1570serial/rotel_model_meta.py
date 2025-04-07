@@ -21,10 +21,12 @@ class RotelSourceMeta:
 INITIAL_VOLUME = 50
 INITIAL_SOURCE = "VIDEO 1"
 
+RSP1570_MODEL_ID = "rsp1570"
 RSP1570_DEVICE_ID = 0xA3
 RSP1570_MIN_VOLUME = 0x00
 RSP1570_MAX_VOLUME = 0x60
 
+RSP1572_MODEL_ID = "rsp1572"
 RSP1572_DEVICE_ID = 0xA5
 RSP1572_MIN_VOLUME = 0x00
 RSP1572_MAX_VOLUME = 0x64
@@ -56,7 +58,7 @@ RSP1572_SOURCES = [
 
 @dataclass
 class RotelModelMeta:
-    name: str
+    model_id: str
     device_id: int
     messages: Dict[str, List[int]]
     min_volume: int
@@ -73,7 +75,7 @@ class RotelModelMeta:
 
 
 RSP1570_META = RotelModelMeta(
-    "rsp1570",
+    RSP1570_MODEL_ID,
     RSP1570_DEVICE_ID,
     RSP1570_MESSAGES,
     RSP1570_MIN_VOLUME,
@@ -83,11 +85,11 @@ RSP1570_META = RotelModelMeta(
     INITIAL_SOURCE,
 )
 RSP1572_META = RotelModelMeta(
-    "rsp1572",
+    RSP1572_MODEL_ID,
     RSP1572_DEVICE_ID,
     RSP1572_MESSAGES,
-    RSP1570_MIN_VOLUME,
-    RSP1570_MAX_VOLUME,
+    RSP1572_MIN_VOLUME,
+    RSP1572_MAX_VOLUME,
     INITIAL_VOLUME,
     RSP1572_SOURCES,
     INITIAL_SOURCE,
@@ -95,6 +97,6 @@ RSP1572_META = RotelModelMeta(
 
 
 ROTEL_MODELS = {
-    "rsp1570": RSP1570_META,
-    "rsp1572": RSP1572_META,
+    RSP1570_MODEL_ID: RSP1570_META,
+    RSP1572_MODEL_ID: RSP1572_META,
 }
