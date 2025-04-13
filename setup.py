@@ -10,7 +10,7 @@ setuptools.setup(
     },  # For PyPi compliance
     setup_requires=["setuptools_scm"],
     author="Phil Porter",
-    description="Rotel RSP-1570 processor asyncio RS-232 protocol",
+    description="Rotel RSP-1570 or RSP-1572 processor asyncio RS-232 protocol",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/pp81381/rsp1570serial",
